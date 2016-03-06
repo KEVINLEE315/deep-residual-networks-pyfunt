@@ -178,7 +178,7 @@ class Solver(object):
         Batch Size: %d;
         Number of Epochs: %d;
         """ % (
-               self.num_process,
+               self.num_processes,
                self.update_rule.__name__,
                str(self.optim_config),
                self.lr_decay,
