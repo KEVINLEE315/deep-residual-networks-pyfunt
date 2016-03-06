@@ -7,9 +7,28 @@ import time
 import optim
 import os
 from sklearn.externals import joblib
-from multiprocessing import Pool
-
 from threading import Thread
+import multiprocessing as mp
+
+from copy_reg import pickle
+from types import MethodType
+
+def _pickle_method(method):
+    func_name = method.im_func.__name__
+    obj = method.im_self
+    cls = method.im_class
+    return _unpickle_method, (func_name, obj, cls)
+
+def _unpickle_method(func_name, obj, cls):
+    for cls in cls.mro():
+        try:
+            func = cls.__dict__[func_name]
+        except KeyError:
+            pass
+        else:
+            break
+    return func.__get__(obj, cls)
+
 
 
 class Solver(object):
@@ -133,7 +152,7 @@ class Solver(object):
         self.check_point_every = kwargs.pop('check_point_every', 0)
         self.custom_update_ld = kwargs.pop('custom_update_ld', False)
         self.batch_augment_func = kwargs.pop('batch_augment_func', False)
-        self.n_threads = kwargs.pop('n_threads', 4)
+        self.num_process = kwargs.pop('num_process', 4)
 
         # Throw an error if there are extra keyword arguments
         if len(kwargs) > 0:
@@ -152,12 +171,14 @@ class Solver(object):
 
     def __str__(self):
         return """
+        Number of threads for training: %d;
         Update Rule: %s;
         Optim Config: %s;
         Learning Rate Decay: %d;
         Batch Size: %d;
         Number of Epochs: %d;
         """ % (
+               self.num_process
                self.update_rule.__name__,
                str(self.optim_config),
                self.lr_decay,
@@ -184,6 +205,8 @@ class Solver(object):
             d = {k: v for k, v in self.optim_config.iteritems()}
             self.optim_configs[p] = d
 
+        self.pool = mp.Pool()
+
     def _step(self):
         '''
         Make a single gradient update. This is called by train() and should not
@@ -199,39 +222,23 @@ class Solver(object):
             X_batch = self.batch_augment_func(X_batch)
 
         # Compute loss and gradient
-        n = self.n_threads
-        threads = [None] * n
-        results = [None] * n
+        n = self.num_process
+        pool = self.pool
+
         X_batches = np.split(X_batch, n)
         y_batches = np.split(y_batch, n)
-
-        for i in range(n):
-            threads[i] = Thread(target=self.model.loss, args=(X_batches[i], y_batches[i], results, i))
-            threads[i].start()
-
-        for i in range(n):
-            threads[i].join()
-
+        results = [pool.apply_async(self.model.loss, (X_batches[i], y_batches[i],)) for i in range(n)]
         losses, gradses = [], []
-
+        i = 0
         for r in results:
-            losses.append(r[0])
-            gradses.append(r[1])
-
+            l, g = r.get()
+            losses.append(l)
+            gradses.append(g)
+            i += 1
         loss = np.mean(losses)
         grads = {}
         for p, w in self.model.params.iteritems():
-            grads[p] = np.mean([g[p] for g in gradses], axis=0)
-
-        # pool = Pool(processes=2)
-        # X_batches = np.split(X_batch, n)
-        # y_batches = np.split(y_batch, n)
-        # args = zip(X_batches, y_batches)
-
-        # losses, gradses = pool.map( self.model.loss, X_batches)
-
-        # # self.model.loss(X_batch, y_batch)
-        # loss, grads = losses.mean(), gradses.mean()
+            grads[p] = np.mean([grad[p] for grad in gradses], axis=0)
 
         self.loss_history.append(loss)
 
@@ -398,3 +405,6 @@ class Solver(object):
 
         # At the end of training swap the best params into the model
         self.model.params = self.best_params
+
+pickle(MethodType, _pickle_method, _unpickle_method)
+

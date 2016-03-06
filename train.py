@@ -22,7 +22,7 @@ def rel_error(x, y): return np.max(
 data = get_CIFAR10_data(
     num_training=50000, num_validation=0, num_test=1000)
 
-num_train = 1000
+num_train = 200
 data = {
     'X_train': data['X_train'][:num_train],
     'y_train': data['y_train'][:num_train],
@@ -46,48 +46,49 @@ def custom_update_decay(epoch):
     return 1
 
 
-#model = ResNet(n_size=1, nfilters=16, naffines=0, dtype=np.float32)
-model = ResNet(n_size=1, num_starting_filters=8)
+if __name__ == '__main__':
+    #model = ResNet(n_size=1, nfilters=16, naffines=0, dtype=np.float32)
+    model = ResNet(n_size=1, num_starting_filters=8)
 
-wd = 1e-4
-optim_config = {'learning_rate': .1, 'nesterov': True,
-                'momentum': .9, 'weight_decay': wd}
-
-
-name = 'resnet3N'
-solver = Solver(model, data,
-                num_epochs=160, batch_size=64,  # 20
-                update_rule='sgd_th',
-                optim_config=optim_config,
-                verbose=True, print_every=100,
-                custom_update_ld=custom_update_decay,
-                batch_augment_func=data_augm,
-                path=name,
-                check_point_every=20,
-                n_threads=1)
+    wd = 1e-4
+    optim_config = {'learning_rate': .1, 'nesterov': True,
+                    'momentum': .9, 'weight_decay': wd}
 
 
-print 'Model: ' + name + ' ' + str(model)
+    name = 'resnet3N'
+    solver = Solver(model, data,
+                    num_epochs=160, batch_size=64,  # 20
+                    update_rule='sgd_th',
+                    optim_config=optim_config,
+                    verbose=True, print_every=100,
+                    custom_update_ld=custom_update_decay,
+                    batch_augment_func=data_augm,
+                    path=name,
+                    check_point_every=20,
+                    n_threads=2)
 
-print 'Solver: ' + str(solver)
 
-solver.train()
-print 'finish'
+    print 'Model: ' + name + ' ' + str(model)
 
-import pdb
-pdb.set_trace()
+    print 'Solver: ' + str(solver)
 
-plt.subplot(2, 1, 1)
-plt.plot(solver.loss_history)
-plt.ylabel('loss')
-plt.xlabel('Iteration')
+    solver.train()
+    print 'finish'
 
-plt.subplot(2, 1, 2)
-plt.plot(solver.train_acc_history)
-plt.plot(solver.val_acc_history)
-plt.ylabel('accuracy')
-plt.xlabel('Check')
-plt.legend(['train', 'val'], loc='upper left')
+    import pdb
+    pdb.set_trace()
 
-plt.show()
+    plt.subplot(2, 1, 1)
+    plt.plot(solver.loss_history)
+    plt.ylabel('loss')
+    plt.xlabel('Iteration')
+
+    plt.subplot(2, 1, 2)
+    plt.plot(solver.train_acc_history)
+    plt.plot(solver.val_acc_history)
+    plt.ylabel('accuracy')
+    plt.xlabel('Check')
+    plt.legend(['train', 'val'], loc='upper left')
+
+    plt.show()
 

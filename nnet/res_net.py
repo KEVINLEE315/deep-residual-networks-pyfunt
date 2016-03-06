@@ -281,13 +281,12 @@ class ResNet(object):
         assert not (result and result_i) or (result and result_i)
         X = X.astype(self.dtype)
         mode = 'test' if y is None else 'train'
+        params = self.params
         conv_param1 = self.conv_param
         conv_param2 = self.conv_param2
         pool_param2 = self.pool_param2
-
         for key, bn_param in self.bn_params.iteritems():
             bn_param[mode] = mode
-
         scores = None
 
         blocks = {}
@@ -295,16 +294,16 @@ class ResNet(object):
         # Forward into the conv blocks
         for i in xrange(self.L):
             idx = i + 1
-            w = self.params['W%d' % idx]
+            w = params['W%d' % idx]
             out_ch, in_ch = w.shape[:2]
-            b = self.params['b%d' % idx]
+            b = params['b%d' % idx]
             h = blocks['h%d' % (idx - 1)]
             if i > 0 and i % 2 == 1:
                 # store skip
                 skip, skip_cache = skip_forward(h, out_ch)
                 blocks['cache_skip%d' % idx] = skip_cache
-            beta = self.params['beta%d' % idx]
-            gamma = self.params['gamma%d' % idx]
+            beta = params['beta%d' % idx]
+            gamma = params['gamma%d' % idx]
             bn_param = self.bn_params['bn_param%d' % idx]
             if i == 0 or in_ch == out_ch:
                 conv_param = conv_param1
@@ -334,18 +333,18 @@ class ResNet(object):
             idx = self.L + i + 2
             h = blocks['h%d' % (idx - 1)]
 
-            w = self.params['W%d' % idx]
-            b = self.params['b%d' % idx]
-            beta = self.params['beta%d' % idx]
-            gamma = self.params['gamma%d' % idx]
+            w = params['W%d' % idx]
+            b = params['b%d' % idx]
+            beta = params['beta%d' % idx]
+            gamma = params['gamma%d' % idx]
             bn_param = self.bn_params['bn_param%d' % idx]
             h, cache_h = affine_batchnorm_relu_forward(h, w, b, gamma,
                                                        beta, bn_param)
 
         # Fnally Forward into the score
         idx = self.L + self.M + 2
-        w = self.params['W%d' % idx]
-        b = self.params['b%d' % idx]
+        w = params['W%d' % idx]
+        b = params['b%d' % idx]
         h = blocks['h%d' % (idx - 1)]
         h, cache_h = affine_forward(h, w, b)
         blocks['h%d' % idx] = h
@@ -354,8 +353,6 @@ class ResNet(object):
         scores = blocks['h%d' % idx]
 
         if y is None:
-            if result is not None:
-                result[result_i] = scores
             return scores
 
         loss, grads = 0, {}
@@ -363,7 +360,7 @@ class ResNet(object):
         # Computing of the loss
         data_loss, dscores = log_softmax_loss(scores, y)
         reg_loss = 0
-        for w in [self.params[f] for f in self.params.keys() if f[0] == 'W']:
+        for w in [params[f] for f in params.keys() if f[0] == 'W']:
             reg_loss += 0.5 * self.reg * np.sum(w * w)
 
         loss = data_loss + reg_loss
@@ -401,7 +398,7 @@ class ResNet(object):
             idx = i + 1
             dh = blocks['dh%d' % idx]
             h_cache = blocks['cache_h%d' % idx]
-            w = self.params['W%d' % idx]
+            w = params['W%d' % idx]
             out_ch, in_ch = w.shape[:2]
             if i > 0 and i % 2 == 0:
                 skip_cache = blocks['cache_skip' + str(idx-1)]
@@ -426,7 +423,7 @@ class ResNet(object):
             blocks['db%d' % idx] = db
 
         # w gradients where we add the regulariation term
-        list_dw = {key[1:]: val + self.reg * self.params[key[1:]]
+        list_dw = {key[1:]: val + self.reg * params[key[1:]]
                    for key, val in blocks.iteritems() if key[:2] == 'dW'}
         # Paramerters b
         list_db = {key[1:]: val for key, val in blocks.iteritems() if key[:2] ==
@@ -444,6 +441,4 @@ class ResNet(object):
         grads.update(list_dgamma)
         grads.update(list_dbeta)
 
-        if result is not None:
-            result[result_i] = loss, grads
         return loss, grads
