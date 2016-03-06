@@ -98,8 +98,7 @@ class ResNet(object):
     '''
 
     def __init__(self, input_dim=(3, 32, 32), num_starting_filters=16, n_size=1,
-                 hidden_dims=[], num_classes=10, weight_scale=.05, reg=0.0,
-                 dtype=np.float32):
+                 hidden_dims=[], num_classes=10, reg=0.0, dtype=np.float32):
         '''
         num_filters=[16, 16, 32, 32, 64, 64],
         Initialize a new network.
@@ -111,8 +110,6 @@ class ResNet(object):
         - filter_size: Size of filters to use in the convolutional layer
         - hidden_dims: Number of units to use in the fully-connected hidden layer
         - num_classes: Number of scores to produce from the final affine layer.
-        - weight_scale: Scalar giving standard deviation for random initialization
-          of weights.
         - reg: Scalar giving L2 regularization strength
         - dtype: numpy datatype to use for computation.
         '''
@@ -126,23 +123,32 @@ class ResNet(object):
         self.filter_size = 3
 
         self.num_filters = self._init_filters(num_starting_filters)
-        print self.num_filters
         self.L = len(self.num_filters)  # Number of convs
         self.M = len(hidden_dims)  # Number of affines
 
-        self._init_conv_weights(weight_scale)
+        self._init_conv_weights()
 
         self.pool_param2 = {'stride': 8, 'pool_height': 8, 'pool_width': 8}
 
         self.h_dims = (
             [hidden_dims[0]] if len(hidden_dims) > 0 else []) + hidden_dims
 
-        self._init_affine_weights(weight_scale)
+        self._init_affine_weights()
 
-        self._init_scoring_layer(weight_scale, num_classes)
+        self._init_scoring_layer(num_classes)
 
         for k, v in self.params.iteritems():
             self.params[k] = v.astype(dtype)
+
+    def __str__(self):
+        return """
+        Residual Network:
+            NSize: %d;
+            Numbers of filters for each layer:\n %d;
+            Optional linear layers dimensions: %s;
+        """ % (self.n_size,
+               self.num_filters[0],
+               str(self.hidden_dims))
 
     def _init_filters(self, nf):
         '''
@@ -164,7 +170,7 @@ class ResNet(object):
             num_filters += [nf] * 2
         return num_filters
 
-    def _init_conv_weights(self, weight_scale):
+    def _init_conv_weights(self):
         '''
         Initialize conv weights.
         Called by self.__init__
@@ -197,7 +203,7 @@ class ResNet(object):
         self.conv_param2 = {'stride': 2, 'pad': 0}
         self.pool_param1 = {'pool_height': 2, 'pool_width': 2, 'stride': 2}
 
-    def _init_affine_weights(self, weight_scale):
+    def _init_affine_weights(self):
         '''
         Initialize affine weights.
         Called by self.__init__
@@ -219,7 +225,7 @@ class ResNet(object):
             self.params['gamma%d' % idx] = gamma
             self.params['beta%d' % idx] = beta
 
-    def _init_scoring_layer(self, weight_scale, num_classes):
+    def _init_scoring_layer(self, num_classes):
         '''
         Initialize scoring layer weights.
         Called by self.__init__
@@ -266,12 +272,13 @@ class ResNet(object):
         b = np.random.normal(0, std, shape[1])
         return w, b
 
-    def loss(self, X, y=None):
+    def loss(self, X, y=None, result=None, result_i=None):
         '''
         TODO: split in _functions
         Evaluate loss and gradient for the three-layer convolutional network.
 
         '''
+        assert not (result and result_i) or (result and result_i)
         X = X.astype(self.dtype)
         mode = 'test' if y is None else 'train'
         conv_param1 = self.conv_param
@@ -303,10 +310,11 @@ class ResNet(object):
                 conv_param = conv_param1
             else:
                 conv_param = conv_param2
-                h = np.pad(h, ((0, 0), (0, 0), (1, 0), (1, 0)), mode='constant')
+                h = np.pad(
+                    h, ((0, 0), (0, 0), (1, 0), (1, 0)), mode='constant')
 
             h, cache_h = conv_batchnorm_relu_forward(
-                    h, w, b, conv_param, gamma, beta, bn_param)
+                h, w, b, conv_param, gamma, beta, bn_param)
 
             if i > 0 and i % 2 == 0:
                 # add skip
@@ -346,6 +354,8 @@ class ResNet(object):
         scores = blocks['h%d' % idx]
 
         if y is None:
+            if result is not None:
+                result[result_i] = scores
             return scores
 
         loss, grads = 0, {}
@@ -434,4 +444,6 @@ class ResNet(object):
         grads.update(list_dgamma)
         grads.update(list_dbeta)
 
+        if result is not None:
+            result[result_i] = loss, grads
         return loss, grads
