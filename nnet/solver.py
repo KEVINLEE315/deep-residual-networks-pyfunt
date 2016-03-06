@@ -152,7 +152,7 @@ class Solver(object):
         self.check_point_every = kwargs.pop('check_point_every', 0)
         self.custom_update_ld = kwargs.pop('custom_update_ld', False)
         self.batch_augment_func = kwargs.pop('batch_augment_func', False)
-        self.num_process = kwargs.pop('num_process', 4)
+        self.num_processes = kwargs.pop('num_processes', 4)
 
         # Throw an error if there are extra keyword arguments
         if len(kwargs) > 0:

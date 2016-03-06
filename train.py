@@ -22,7 +22,7 @@ def rel_error(x, y): return np.max(
 data = get_CIFAR10_data(
     num_training=50000, num_validation=0, num_test=1000)
 
-num_train = 200
+num_train = 50000
 data = {
     'X_train': data['X_train'][:num_train],
     'y_train': data['y_train'][:num_train],
@@ -65,7 +65,7 @@ if __name__ == '__main__':
                     batch_augment_func=data_augm,
                     path=name,
                     check_point_every=20,
-                    n_threads=2)
+                    num_processes=1)
 
 
     print 'Model: ' + name + ' ' + str(model)
