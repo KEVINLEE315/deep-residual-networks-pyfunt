@@ -199,7 +199,7 @@ class Solver(object):
             X_batch = self.batch_augment_func(X_batch)
 
         # Compute loss and gradient
-        n = n_threads
+        n = self.n_threads
         threads = [None] * n
         results = [None] * n
         X_batches = np.split(X_batch, n)
