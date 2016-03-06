@@ -222,7 +222,7 @@ class Solver(object):
             X_batch = self.batch_augment_func(X_batch)
 
         # Compute loss and gradient
-        n = self.num_process
+        n = self.num_processes
         pool = self.pool
 
         X_batches = np.split(X_batch, n)
