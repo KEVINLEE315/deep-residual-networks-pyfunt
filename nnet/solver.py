@@ -7,6 +7,9 @@ import time
 import optim
 import os
 from sklearn.externals import joblib
+from multiprocessing import Pool
+
+from threading import Thread
 
 
 class Solver(object):
@@ -130,6 +133,7 @@ class Solver(object):
         self.check_point_every = kwargs.pop('check_point_every', 0)
         self.custom_update_ld = kwargs.pop('custom_update_ld', False)
         self.batch_augment_func = kwargs.pop('batch_augment_func', False)
+        self.n_threads = kwargs.pop('n_threads', 4)
 
         # Throw an error if there are extra keyword arguments
         if len(kwargs) > 0:
@@ -145,6 +149,21 @@ class Solver(object):
         self._reset()
         if self.load_dir:
             self.load_current_checkpoints()
+
+    def __str__(self):
+        return """
+        Update Rule: %s;
+        Optim Config: %s;
+        Learning Rate Decay: %d;
+        Batch Size: %d;
+        Number of Epochs: %d;
+        """ % (
+               self.update_rule.__name__,
+               str(self.optim_config),
+               self.lr_decay,
+               self.batch_size,
+               self.num_epochs
+        )
 
     def _reset(self):
         '''
@@ -180,7 +199,40 @@ class Solver(object):
             X_batch = self.batch_augment_func(X_batch)
 
         # Compute loss and gradient
-        loss, grads = self.model.loss(X_batch, y_batch)
+        n = 2
+        threads = [None] * n
+        results = [None] * n
+        X_batches = np.split(X_batch, n)
+        y_batches = np.split(y_batch, n)
+
+        for i in range(n):
+            threads[i] = Thread(target=self.model.loss, args=(X_batches[i], y_batches[i], results, i))
+            threads[i].start()
+
+        for i in range(n):
+            threads[i].join()
+
+        losses, gradses = [], []
+
+        for r in results:
+            losses.append(r[0])
+            gradses.append(r[1])
+
+        loss = np.mean(losses)
+        grads = {}
+        for p, w in self.model.params.iteritems():
+            grads[p] = np.mean([g[p] for g in gradses], axis=0)
+
+        # pool = Pool(processes=2)
+        # X_batches = np.split(X_batch, n)
+        # y_batches = np.split(y_batch, n)
+        # args = zip(X_batches, y_batches)
+
+        # losses, gradses = pool.map( self.model.loss, X_batches)
+
+        # # self.model.loss(X_batch, y_batch)
+        # loss, grads = losses.mean(), gradses.mean()
+
         self.loss_history.append(loss)
 
         # Perform a parameter update
