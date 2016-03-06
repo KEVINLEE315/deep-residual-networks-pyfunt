@@ -12,6 +12,7 @@ checkpoints/
 
 # datasets
 cifar-10-batches-py/
+GTSRB/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
