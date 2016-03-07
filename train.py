@@ -9,7 +9,7 @@ from nnet.data.data_augmentation import *
 # from nnet.gradient_check import eval_numerical_gradient, eval_numerical_gradient_array
 from nnet.solver import Solver as Solver
 import matplotlib.pyplot as plt
-from utils.vis_utils import visualize_grid
+from nnet.utils.vis_utils import visualize_grid
 
 plt.rcParams['figure.figsize'] = (10.0, 8.0)  # set default size of plots
 plt.rcParams['image.interpolation'] = 'nearest'

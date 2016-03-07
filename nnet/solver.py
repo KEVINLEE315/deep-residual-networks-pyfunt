@@ -173,7 +173,7 @@ class Solver(object):
 
     def __str__(self):
         return """
-        Number of threads for training: %d;
+        Number of processes: %d;
         Update Rule: %s;
         Optim Config: %s;
         Learning Rate Decay: %d;
@@ -233,8 +233,8 @@ class Solver(object):
             n = self.num_processes
             pool = self.pool
 
-            X_batches = np.split(X_batch, n)
-            y_batches = np.split(y_batch, n)
+            X_batches = np.array_split(X_batch, n)
+            y_batches = np.array_split(y_batch, n)
             try:
                 job_args = [(X_batches[i], y_batches[i]) for i in range(n)]
                 results = pool.map_async(self.model.loss_helper, job_args).get()
@@ -345,7 +345,7 @@ class Solver(object):
                 scores = self.model.loss(X[start:end])
                 y_pred.append(np.argmax(scores, axis=1))
             else:
-                X_subs = np.split(X[start:end], self.num_processes)
+                X_subs = np.array_split(X[start:end], self.num_processes)
                 try:
                     results = self.pool.map_async(self.model.loss, X_subs).get()
                     for r in results:
