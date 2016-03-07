@@ -8,7 +8,8 @@ from nnet.data.data_utils import *
 from nnet.data.data_augmentation import *
 # from nnet.gradient_check import eval_numerical_gradient, eval_numerical_gradient_array
 from nnet.solver import Solver as Solver
-
+import matplotlib.pyplot as plt
+from utils.vis_utils import visualize_grid
 
 plt.rcParams['figure.figsize'] = (10.0, 8.0)  # set default size of plots
 plt.rcParams['image.interpolation'] = 'nearest'
@@ -48,7 +49,7 @@ def custom_update_decay(epoch):
 
 if __name__ == '__main__':
     #model = ResNet(n_size=1, nfilters=16, naffines=0, dtype=np.float32)
-    model = ResNet(n_size=1, num_starting_filters=8)
+    model = ResNet(n_size=1, num_starting_filters=16)
 
     wd = 1e-4
     optim_config = {'learning_rate': .1, 'nesterov': True,

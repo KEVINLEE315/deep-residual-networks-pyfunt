@@ -1,23 +1,22 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from utils.vis_utils import visualize_grid
 from nnet.data.data_augmentation import *
 from datetime import datetime
 import time
 import optim
 import os
 from sklearn.externals import joblib
-from threading import Thread
 import multiprocessing as mp
-
+import signal
 from copy_reg import pickle
 from types import MethodType
+
 
 def _pickle_method(method):
     func_name = method.im_func.__name__
     obj = method.im_self
     cls = method.im_class
     return _unpickle_method, (func_name, obj, cls)
+
 
 def _unpickle_method(func_name, obj, cls):
     for cls in cls.mro():
@@ -29,6 +28,9 @@ def _unpickle_method(func_name, obj, cls):
             break
     return func.__get__(obj, cls)
 
+
+def init_worker():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 class Solver(object):
@@ -152,7 +154,7 @@ class Solver(object):
         self.check_point_every = kwargs.pop('check_point_every', 0)
         self.custom_update_ld = kwargs.pop('custom_update_ld', False)
         self.batch_augment_func = kwargs.pop('batch_augment_func', False)
-        self.num_processes = kwargs.pop('num_processes', 4)
+        self.num_processes = kwargs.pop('num_processes', 1)
 
         # Throw an error if there are extra keyword arguments
         if len(kwargs) > 0:
@@ -205,7 +207,9 @@ class Solver(object):
             d = {k: v for k, v in self.optim_config.iteritems()}
             self.optim_configs[p] = d
 
-        self.pool = mp.Pool()
+        self.multiprocessing = bool(self.num_processes-1)
+        if self.multiprocessing:
+            self.pool = mp.Pool(self.num_processes, init_worker)
 
     def _step(self):
         '''
@@ -214,6 +218,7 @@ class Solver(object):
         '''
         # Make a minibatch of training data
         num_train = self.X_train.shape[0]
+        n = self.num_processes
         batch_mask = np.random.choice(num_train, self.batch_size)
         X_batch = self.X_train[batch_mask]
         y_batch = self.y_train[batch_mask]
@@ -222,23 +227,32 @@ class Solver(object):
             X_batch = self.batch_augment_func(X_batch)
 
         # Compute loss and gradient
-        n = self.num_processes
-        pool = self.pool
+        if not self.multiprocessing:
+            loss, grads = self.model.loss(X_batch, y_batch)
+        else:
+            n = self.num_processes
+            pool = self.pool
 
-        X_batches = np.split(X_batch, n)
-        y_batches = np.split(y_batch, n)
-        results = [pool.apply_async(self.model.loss, (X_batches[i], y_batches[i],)) for i in range(n)]
-        losses, gradses = [], []
-        i = 0
-        for r in results:
-            l, g = r.get()
-            losses.append(l)
-            gradses.append(g)
-            i += 1
-        loss = np.mean(losses)
-        grads = {}
-        for p, w in self.model.params.iteritems():
-            grads[p] = np.mean([grad[p] for grad in gradses], axis=0)
+            X_batches = np.split(X_batch, n)
+            y_batches = np.split(y_batch, n)
+            try:
+                job_args = [(X_batches[i], y_batches[i]) for i in range(n)]
+                results = pool.map_async(self.model.loss_helper, job_args).get()
+                losses, gradses = [], []
+                i = 0
+                for r in results:
+                    l, g = r
+                    losses.append(l)
+                    gradses.append(g)
+                    i += 1
+            except Exception, e:
+                pool.terminate()
+                pool.join()
+                raise e
+            loss = np.mean(losses)
+            grads = {}
+            for p, w in self.model.params.iteritems():
+                grads[p] = np.mean([grad[p] for grad in gradses], axis=0)
 
         self.loss_history.append(loss)
 
@@ -275,15 +289,6 @@ class Solver(object):
         '''
         Save the solver's current status
         '''
-        # num, last_checkpoints = self.load_current_checkpoints()
-
-        # if self.best_val_acc > last_checkpoints['best_val_acc']:
-        #     best_val_acc = self.best_val_acc
-        #     best_params = self.best_params
-        # else:
-        #     best_val_acc = last_checkpoints['best_val_acc']
-        #     best_params = last_checkpoints['best_params']
-
         checkpoints = {
             'model': self.model,
             'epoch': self.epoch,
@@ -330,11 +335,26 @@ class Solver(object):
         if N % batch_size != 0:
             num_batches += 1
         y_pred = []
+
+        # Compute loss and gradient
         for i in xrange(num_batches):
             start = i * batch_size
             end = (i + 1) * batch_size
-            scores = self.model.loss(X[start:end])
-            y_pred.append(np.argmax(scores, axis=1))
+
+            if not self.multiprocessing:
+                scores = self.model.loss(X[start:end])
+                y_pred.append(np.argmax(scores, axis=1))
+            else:
+                X_subs = np.split(X[start:end], self.num_processes)
+                try:
+                    results = self.pool.map_async(self.model.loss, X_subs).get()
+                    for r in results:
+                        y_pred.append(np.argmax(r, axis=1))
+                except Exception, e:
+                    self.pool.terminate()
+                    self.pool.join()
+                    raise e
+
         y_pred = np.hstack(y_pred)
         acc = np.mean(y_pred == y)
 
@@ -350,9 +370,9 @@ class Solver(object):
         print 'Training for %d epochs, or %d iterations.' % (self.num_epochs, num_iterations)
         secs_per_batch = []
         for t in xrange(num_iterations):
-            t0 = time.clock()
+            t0 = time.time()
             self._step()
-            secs_per_batch.append(time.clock() - t0)
+            secs_per_batch.append(time.time() - t0)
 
             # At the end of every epoch, increment the epoch counter and decay the
             # learning rate.
@@ -405,6 +425,7 @@ class Solver(object):
 
         # At the end of training swap the best params into the model
         self.model.params = self.best_params
+        self.pool.terminate()
+        self.pool.join()
 
 pickle(MethodType, _pickle_method, _unpickle_method)
-

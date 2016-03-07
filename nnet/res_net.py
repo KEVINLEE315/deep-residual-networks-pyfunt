@@ -272,13 +272,15 @@ class ResNet(object):
         b = np.random.normal(0, std, shape[1])
         return w, b
 
-    def loss(self, X, y=None, result=None, result_i=None):
+    def loss_helper(self, args):
+        return self.loss(*args)
+
+    def loss(self, X, y=None):
         '''
         TODO: split in _functions
         Evaluate loss and gradient for the three-layer convolutional network.
 
         '''
-        assert not (result and result_i) or (result and result_i)
         X = X.astype(self.dtype)
         mode = 'test' if y is None else 'train'
         params = self.params
