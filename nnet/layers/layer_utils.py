@@ -37,19 +37,18 @@ def skip_forward(x, n_out_channels):
     skip = np.array(x, copy=True)
     pool_cache, downsampled, skip_p = None, False, 0
 
-
     if n_out_channels > n_in_channels:
         # downsampling
         pool_param = {'pool_width': 2, 'pool_height': 2, 'stride': 2}
         skip, pool_cache = avg_pool_forward(skip, pool_param)
         # padding
-        p = skip_p = (n_in_channels)/2
+        p = (n_in_channels)/2
         skip = np.pad(skip, ((0, 0), (p, p), (0, 0), (0, 0)),
                       mode='constant')
 
         downsampled = True
 
-    return skip, (pool_cache, downsampled, skip_p)
+    return skip, (pool_cache, downsampled)
 
 
 def skip_backward(dout, cache):
@@ -63,7 +62,7 @@ def skip_backward(dout, cache):
     Returns:
     - dskip: Gradient with respect to x, of shape (N, d1, ..., d_k)
     '''
-    pool_cache, downsampled, skip_p = cache
+    pool_cache, downsampled = cache
     dskip = np.array(dout, copy=True)
     if downsampled:
         # back pad
