@@ -1,4 +1,5 @@
 # PyResNet
+
 Residual Network Implementation in Python + Numpy, Inspired by Stanfors's CS321N
 
 Implementation of ["Deep Residual Learning for Image Recognition",Kaiming

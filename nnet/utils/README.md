@@ -3,10 +3,11 @@
 In this folder you will find some utilities from cs231n.
 
 # Directory Structure
-.
-+-- __init__.py
-+-- gradient_check.py
-+-- vis_utils.py
+
+	.
+	+-- __init__.py
+	+-- gradient_check.py
+	+-- vis_utils.py
 
 # gradient_check.py
 

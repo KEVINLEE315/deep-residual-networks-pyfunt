@@ -3,8 +3,17 @@
 
 import numpy as np
 
-from nnet.layers.layers import *
-from nnet.layers.layer_utils import *
+from nnet.layers.layer_utils import conv_batchnorm_relu_forward
+from nnet.layers.layer_utils import conv_batchnorm_relu_backward
+from nnet.layers.layer_utils import skip_forward, skip_backward
+from nnet.layers.layer_utils import affine_batchnorm_relu_forward
+from nnet.layers.layer_utils import affine_batchnorm_relu_backward
+from nnet.layers.layer_utils import avg_pool_forward
+from nnet.layers.layer_utils import avg_pool_backward
+from nnet.layers.layer_utils import affine_forward, affine_backward
+from nnet.layers.layers import log_softmax_loss
+from nnet.layers.init import init_conv_w_kaiming, init_bn_w_gcr
+from nnet.layers.init import init_affine_wb
 
 
 class ResNet(object):
@@ -96,22 +105,22 @@ class ResNet(object):
 
     After every layer, a batch normalization with momentum .1 is applied.
 
-    Weight initialization:
+    Weight initialization (check also layers/init.py and layers/README.md):
     - Inizialize the weights and biases for the affine layers in the same
      way of torch's default mode by calling _init_affine_wb that returns a
      tuple (w, b).
     - Inizialize the weights for the conv layers in the same
-     way of torch's default mode by calling _init_conv_w.
+     way of torch's default mode by calling init_conv_w.
     - Inizialize the weights for the conv layers in the same
-     way of kaiming's mode by calling _init_conv_w
+     way of kaiming's mode by calling init_conv_w_kaiming
      (http://arxiv.org/abs/1502.01852 and
       http://andyljones.tumblr.com/post/110998971763/an-explanation-of-xavier-\
       initialization)
     - Initialize batch normalization layer's weights like torch's default by
-    calling _init_bn_w
+    calling init_bn_w
     - Initialize batch normalization layer's weights like cgr's first resblock\
     's bn (https://github.com/gcr/torch-residual-networks/blob/master/residual\
-           -layers.lua#L57-L59) by calling _init_bn_w_gcr
+           -layers.lua#L57-L59) by calling init_bn_w_gcr.
 
     '''
 
@@ -191,60 +200,60 @@ class ResNet(object):
             num_filters += [nf] * 2
         return num_filters
 
-    def _init_conv_w(self, shape):
-        '''
-        Initialize convolution layer's weights like torch's linear default
-        behaviour, called by _init_conv_weights
-        For more infos:
-        https://github.com/NVIDIA/DIGITS/blob/master/examples/weight-init/READ\
-        ME.md
-        https://github.com/torch/nn/blob/master/SpatialConvolution.lua#L31
-        '''
-        input_n = np.prod(shape[1:])
-        std = 1./np.sqrt(input_n)
-        return np.random.normal(0, std, shape)
+    # def _init_conv_w(self, shape):
+    #     '''
+    #     Initialize convolution layer's weights like torch's linear default
+    #     behaviour, called by _init_conv_weights
+    #     For more infos:
+    #     https://github.com/NVIDIA/DIGITS/blob/master/examples/weight-init/READ\
+    #     ME.md
+    #     https://github.com/torch/nn/blob/master/SpatialConvolution.lua#L31
+    #     '''
+    #     input_n = np.prod(shape[1:])
+    #     std = 1./np.sqrt(input_n)
+    #     return np.random.normal(0, std, shape)
 
-    def _init_conv_w_kaiming(self, shape, gain=2.):
-        '''
-        Initialize convolution layer's weights like torch's nninit kaiming, \
-        called by _init_conv_weights
-        with gain equal to 'relu' (mapped to the value 2)
-        For more infos:
-        https://github.com/Kaixhin/nninit
-        http://arxiv.org/abs/1502.01852
-        http://andyljones.tumblr.com/post/110998971763/an-explanation-of-xavie\
-        r-initialization
-        '''
-        input_n = np.prod(shape[1:])
-        std = np.sqrt(gain/input_n)
-        return np.random.normal(0., std, shape)
+    # def _init_conv_w_kaiming(self, shape, gain=2.):
+    #     '''
+    #     Initialize convolution layer's weights like torch's nninit kaiming, \
+    #     called by _init_conv_weights
+    #     with gain equal to 'relu' (mapped to the value 2)
+    #     For more infos:
+    #     https://github.com/Kaixhin/nninit
+    #     http://arxiv.org/abs/1502.01852
+    #     http://andyljones.tumblr.com/post/110998971763/an-explanation-of-xavie\
+    #     r-initialization
+    #     '''
+    #     input_n = np.prod(shape[1:])
+    #     std = np.sqrt(gain/input_n)
+    #     return np.random.normal(0., std, shape)
 
-    def _init_affine_wb(self, shape):
-        '''
-        Initialize affine layer's weights and biases like torch's linear \
-        default behaviour, called by _init_affine_weights
-        For more infos: https://github.com/torch/nn/blob/master/Linear.lua
-        '''
-        std = 1./np.sqrt(shape[0])
-        w = np.random.normal(0, std, shape)
-        b = np.random.normal(0, std, shape[1])
-        return w, b
+    # def _init_affine_wb(self, shape):
+    #     '''
+    #     Initialize affine layer's weights and biases like torch's linear \
+    #     default behaviour, called by _init_affine_weights
+    #     For more infos: https://github.com/torch/nn/blob/master/Linear.lua
+    #     '''
+    #     std = 1./np.sqrt(shape[0])
+    #     w = np.random.normal(0, std, shape)
+    #     b = np.random.normal(0, std, shape[1])
+    #     return w, b
 
-    def _init_bn_w(self, n_ch):
-        '''
-        Initialize batch normalization layer's weights like torch's default
-        mode, for more infos:
-        https://github.com/torch/nn/blob/master/BatchNormalization.lua
-        '''
-        return np.random.uniform(n_ch)
+    # def _init_bn_w(self, n_ch):
+    #     '''
+    #     Initialize batch normalization layer's weights like torch's default
+    #     mode, for more infos:
+    #     https://github.com/torch/nn/blob/master/BatchNormalization.lua
+    #     '''
+    #     return np.random.uniform(n_ch)
 
-    def _init_bn_w_gcr(self, n_ch):
-        '''
-        Initialize batch normalization layer's weights like torch's default
-        mode, for more infos:
-        https://github.com/torch/nn/blob/master/BatchNormalization.lua
-        '''
-        return np.random.normal(1, 2e-3, n_ch)
+    # def _init_bn_w_gcr(self, n_ch):
+    #     '''
+    #     Initialize batch normalization layer's weights like torch's default
+    #     mode, for more infos:
+    #     https://github.com/torch/nn/blob/master/BatchNormalization.lua
+    #     '''
+    #     return np.random.normal(1, 2e-3, n_ch)
 
     def _init_conv_weights(self):
         '''
@@ -261,14 +270,14 @@ class ResNet(object):
             idx = i + 1
             shape = F[i + 1], F[i], filter_size, filter_size
             out_ch = shape[0]
-            W = self._init_conv_w_kaiming(shape)
+            W = init_conv_w_kaiming(shape)
             b = np.zeros(out_ch)
             self.params['W%d' % idx] = W
             self.params['b%d' % idx] = b
             bn_param = {'mode': 'train',
                         'running_mean': np.zeros(out_ch),
                         'running_var': np.ones(out_ch)}
-            gamma = self._init_bn_w_gcr(out_ch)
+            gamma = init_bn_w_gcr(out_ch)
             beta = np.zeros(out_ch)
             self.bn_params['bn_param%d' % idx] = bn_param
             self.params['gamma%d' % idx] = gamma
@@ -289,7 +298,7 @@ class ResNet(object):
             idx = self.L + i + 2
             shape = dims[i], dims[i + 1]
             out_ch = shape[1]
-            W, b = self._init_affine_wb(shape)
+            W, b = init_affine_wb(shape)
             self.params['W%d' % idx] = W
             self.params['b%d' % idx] = b
             bn_param = {'mode': 'train',
@@ -310,7 +319,7 @@ class ResNet(object):
         in_ch = self.h_dims[-1] if \
             len(self.h_dims) > 0 else self.num_filters[-1]
         shape = in_ch, num_classes
-        W, b = self._init_affine_wb(shape)
+        W, b = init_affine_wb(shape)
         i = self.L + self.M + 2
         self.params['W%d' % i] = W
         self.params['b%d' % i] = b
