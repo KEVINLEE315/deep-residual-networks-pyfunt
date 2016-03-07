@@ -3,12 +3,12 @@
 
 import numpy as np
 
-from nnet.layers.layer import skip_forward, skip_backward
 from nnet.layers.layers import log_softmax_loss
 from nnet.layers.layer_utils import conv_batchnorm_relu_forward
 from nnet.layers.layer_utils import conv_batchnorm_relu_backward
 from nnet.layers.layer_utils import affine_batchnorm_relu_forward
 from nnet.layers.layer_utils import affine_batchnorm_relu_backward
+from nnet.layers.layer_utils import skip_forward, skip_backward
 from nnet.layers.layer_utils import avg_pool_forward
 from nnet.layers.layer_utils import avg_pool_backward
 from nnet.layers.layer_utils import affine_forward, affine_backward

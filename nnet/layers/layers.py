@@ -46,63 +46,6 @@ def relu_backward(dout, cache):
     return dx
 
 
-def skip_forward(x, n_out_channels):
-    '''
-    Computes the forward pass for a skip connection.
-
-    The input x has shape (N, d_1, d_2, d_3) where x[i] is the ith input.
-    If n_out_channels is equal to 2* d_1, downsampling and padding are applied
-    else, the input is replicated in output
-
-    Inputs:
-    x - Input data, of shape (N, d_1, d_2, d_3)
-    n_out_channels - Number of channels in output
-
-    Returns a tuple of:
-    - skip: output, of shape (N, n_out_channels,  d_2/2, d_3/2)
-    - cache: (pool_cache, downsampled, skip_p)
-    '''
-    N, n_in_channels, H, W = x.shape
-    assert n_in_channels == n_out_channels or n_out_channels = n_in_channels/2
-    skip = np.array(x, copy=True)
-    pool_cache, downsampled, skip_p = None, False, 0
-
-
-    if n_out_channels > n_in_channels:
-        # downsampling
-        pool_param = {'pool_width': 2, 'pool_height': 2, 'stride': 2}
-        skip, pool_cache = avg_pool_forward(skip, pool_param)
-        # padding
-        p = skip_p = (n_out_channels - n_in_channels)/2
-        skip = np.pad(skip, ((0, 0), (p, p), (0, 0), (0, 0)),
-                      mode='constant')
-
-        downsampled = True
-
-    return skip, (pool_cache, downsampled, skip_p)
-
-
-def skip_backward(dout, cache):
-    '''
-    Computes the backward pass for a skip connection.
-
-    The input x has shape (N, d_1, d_2, d_3) where x[i] is the ith input.
-    If n_out_channels was equal to 2* d_1, we back-apply downsampling and padding,
-    else, the input is replicated in output
-
-    Returns:
-    - dskip: Gradient with respect to x, of shape (N, d1, ..., d_k)
-    '''
-    pool_cache, downsampled, skip_p = cache
-    dskip = np.array(dout, copy=True)
-    if downsampled:
-        # back pad
-        dskip = dskip[:, skip_p:-skip_p, :, :]
-        # back downsampling
-        dskip = avg_pool_backward(dskip, pool_cache)
-    return dskip
-
-
 def affine_forward(x, w, b):
     '''
     Computes the forward pass for an affine (fully-connected) layer.
