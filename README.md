@@ -16,52 +16,53 @@ channels.
 
 The network has, like in the reference paper, (6*n)+2 layers,
 composed as below:
-	                                        (image_dim: 3, 32, 32; F=16)
-	                                        (input_dim: N, *image_dim)
-	 INPUT
-	    |
-	    v
-	+-------------------+
-	|conv[F, *image_dim]|                    (out_shape: N, 16, 32, 32)
-	+-------------------+
-	    |
-	    v
-	+-------------------------+
-	|n * res_block[F, F, 3, 3]|              (out_shape: N, 16, 32, 32)
-	+-------------------------+
-	    |
-	    v
-	+-------------------------+
-	|res_block[2*F, F, 3, 3]  |              (out_shape: N, 32, 16, 16)
-	+-------------------------+
-	    |
-	    v
-	+---------------------------------+
-	|(n-1) * res_block[2*F, 2*F, 3, 3]|      (out_shape: N, 32, 16, 16)
-	+---------------------------------+
-	    |
-	    v
-	+-------------------------+
-	|res_block[4*F, 2*F, 3, 3]|              (out_shape: N, 64, 8, 8)
-	+-------------------------+
-	    |
-	    v
-	+---------------------------------+
-	|(n-1) * res_block[4*F, 4*F, 3, 3]|      (out_shape: N, 64, 8, 8)
-	+---------------------------------+
-	    |
-	    v
-	+-------------+
-	|pool[1, 8, 8]|                          (out_shape: N, 64, 1, 1)
-	+-------------+
-	    |
-	    v
-	+-------+
-	|softmax|                                (out_shape: N, num_classes)
-	+-------+
-	    |
-	    v
-	 OUTPUT
+
+			                                        (image_dim: 3, 32, 32; F=16)
+			                                        (input_dim: N, *image_dim)
+			 INPUT
+			    |
+			    v
+			+-------------------+
+			|conv[F, *image_dim]|                    (out_shape: N, 16, 32, 32)
+			+-------------------+
+			    |
+			    v
+			+-------------------------+
+			|n * res_block[F, F, 3, 3]|              (out_shape: N, 16, 32, 32)
+			+-------------------------+
+			    |
+			    v
+			+-------------------------+
+			|res_block[2*F, F, 3, 3]  |              (out_shape: N, 32, 16, 16)
+			+-------------------------+
+			    |
+			    v
+			+---------------------------------+
+			|(n-1) * res_block[2*F, 2*F, 3, 3]|      (out_shape: N, 32, 16, 16)
+			+---------------------------------+
+			    |
+			    v
+			+-------------------------+
+			|res_block[4*F, 2*F, 3, 3]|              (out_shape: N, 64, 8, 8)
+			+-------------------------+
+			    |
+			    v
+			+---------------------------------+
+			|(n-1) * res_block[4*F, 4*F, 3, 3]|      (out_shape: N, 64, 8, 8)
+			+---------------------------------+
+			    |
+			    v
+			+-------------+
+			|pool[1, 8, 8]|                          (out_shape: N, 64, 1, 1)
+			+-------------+
+			    |
+			    v
+			+-------+
+			|softmax|                                (out_shape: N, num_classes)
+			+-------+
+			    |
+			    v
+			 OUTPUT
 
 Every convolution layer has a pad=1 and stride=1, except for the dimension
 enhancning layers which has a stride of 2 to mantain the computational
@@ -95,12 +96,12 @@ I have trained the model for nSize = 1, 3 in the reference paper they started fr
 Obviously in terms of computation times, the 20 layer network porforms ~3.1 times slower
 
 # Directory Structure
-.
-+-- __init__.py
-+-- nnet/
-+-- res_net.py
-+-- train.py
-+-- requirements.txt
+	.
+	+-- __init__.py
+	+-- nnet/
+	+-- res_net.py
+	+-- train.py
+	+-- requirements.txt
 
 # res_net.py
 
@@ -120,13 +121,13 @@ Check the README.md found in all sub directories
 
 # Requirements
 
-	- [Python 2.7](https://www.python.org/)
-	- [Cython](cython.org/)
-	- [matplotlib](matplotlib.org/)
-	- [numpy](www.numpy.org/)
-	- [scipy](www.scipy.org/)
-	- [cv2](opencv.org) (only for loading GTSRB)
-	- [scikit_learn](scikit-learn.org/)
+- [Python 2.7](https://www.python.org/)
+- [Cython](cython.org/)
+- [matplotlib](matplotlib.org/)
+- [numpy](www.numpy.org/)
+- [scipy](www.scipy.org/)
+- [cv2](opencv.org) (only for loading GTSRB)
+- [scikit_learn](scikit-learn.org/)
 
 After you get Python, you can get [pip](https://pypi.python.org/pypi/pip) and install all requirements by running:
 	
