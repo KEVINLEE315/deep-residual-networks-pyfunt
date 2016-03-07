@@ -47,9 +47,26 @@ def relu_backward(dout, cache):
 
 
 def skip_forward(x, n_out_channels):
+    '''
+    Computes the forward pass for a skip connection.
+
+    The input x has shape (N, d_1, d_2, d_3) where x[i] is the ith input.
+    If n_out_channels is equal to 2* d_1, downsampling and padding are applied
+    else, the input is replicated in output
+
+    Inputs:
+    x - Input data, of shape (N, d_1, d_2, d_3)
+    n_out_channels - Number of channels in output
+
+    Returns a tuple of:
+    - skip: output, of shape (N, n_out_channels,  d_2/2, d_3/2)
+    - cache: (pool_cache, downsampled, skip_p)
+    '''
     N, n_in_channels, H, W = x.shape
+    assert n_in_channels == n_out_channels or n_out_channels = n_in_channels/2
     skip = np.array(x, copy=True)
     pool_cache, downsampled, skip_p = None, False, 0
+
 
     if n_out_channels > n_in_channels:
         # downsampling
@@ -66,6 +83,16 @@ def skip_forward(x, n_out_channels):
 
 
 def skip_backward(dout, cache):
+    '''
+    Computes the backward pass for a skip connection.
+
+    The input x has shape (N, d_1, d_2, d_3) where x[i] is the ith input.
+    If n_out_channels was equal to 2* d_1, we back-apply downsampling and padding,
+    else, the input is replicated in output
+
+    Returns:
+    - dskip: Gradient with respect to x, of shape (N, d1, ..., d_k)
+    '''
     pool_cache, downsampled, skip_p = cache
     dskip = np.array(dout, copy=True)
     if downsampled:
