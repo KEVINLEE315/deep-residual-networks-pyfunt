@@ -15,36 +15,6 @@ max_pool_forward = avg_pool_forward_fast
 max_pool_backward = avg_pool_backward_fast
 
 
-def skip_forward(x, n_out_channels):
-    N, n_in_channels, H, W = x.shape
-    skip = np.array(x, copy=True)
-    pool_cache, downsampled, skip_p = None, False, 0
-
-    if n_out_channels > n_in_channels:
-        # downsampling
-        pool_param = {'pool_width': 2, 'pool_height': 2, 'stride': 2}
-        skip, pool_cache = avg_pool_forward(skip, pool_param)
-        # padding
-        p = skip_p = (n_out_channels - n_in_channels)/2
-        skip = np.pad(skip, ((0, 0), (p, p), (0, 0), (0, 0)),
-                      mode='constant')
-
-        downsampled = True
-
-    return skip, (pool_cache, downsampled, skip_p)
-
-
-def skip_backward(dout, cache):
-    pool_cache, downsampled, skip_p = cache
-    dskip = np.array(dout, copy=True)
-    if downsampled:
-        # back pad
-        dskip = dskip[:, skip_p:-skip_p, :, :]
-        # back downsampling
-        dskip = avg_pool_backward(dskip, pool_cache)
-    return dskip
-
-
 def affine_relu_forward(x, w, b):
     '''
     Convenience layer that perorms an affine transform followed by a ReLU

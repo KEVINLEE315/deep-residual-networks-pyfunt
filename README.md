@@ -95,7 +95,7 @@ I have trained the model for nSize = 1, 3. In the reference paper the authors st
 
 Obviously in terms of computation times, the 20 layer network porforms ~3.1 times slower.
 
-I all the experiments I use the following training configuration (more or less the same as the reference paper):
+I all the experiments I use the following training configuration (more or less the same as the reference pa per):
 
 - update rule: SGD with nesterov momentum (= 0.9) ;
 - weight decay: 1e-4;
@@ -116,6 +116,8 @@ In all cases I also applied random mirroring like gcr's implementation.
 # Weight Visualization
 
 # Images not recognized
+
+# Fooling the Network
 
 # Directory Structure
 	.
