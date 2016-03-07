@@ -75,8 +75,8 @@ def affine_relu_backward(dout, cache):
 
 def affine_batchnorm_relu_forward(x, w, b, gamma, beta, bn_param):
     '''
-    Convenience layer that perorms an affine transform followed by a ReLU
-
+    Convenience layer that performs an affine transform followed by batch
+    normalization, followed by a ReLU.
     Inputs:
     - x: Input to the affine layer
     - w, b: Weights for the affine layer
@@ -105,51 +105,6 @@ def affine_batchnorm_relu_backward(dout, cache):
     dhnormrelu = relu_backward(dout, relu_cache)
     dhnorm, dgamma, dbeta = batchnorm_backward(dhnormrelu, hnorm_cache)
     dx, dw, db = affine_backward(dhnorm, h_cache)
-
-    return dx, dw, db, dgamma, dbeta
-
-
-def conv_batchnorm_relu_pool_forward(x, w, b, conv_param, gamma, beta, bn_param, pool_param):
-
-    out, conv_cache = conv_forward_fast(x, w, b, conv_param)
-    out, batchnorm_cache = spatial_batchnorm_forward(
-        out, gamma, beta, bn_param)
-    out, relu_cache = relu_forward(out)
-    out, maxpool_cache = max_pool_forward(out, pool_param)
-
-    cache = (conv_cache, batchnorm_cache, relu_cache, maxpool_cache)
-    return out, cache
-
-
-def conv_batchnorm_relu_pool_backward(dout, cache):
-
-    conv_cache, batchnorm_cache, relu_cache, maxpool_cache = cache
-    dout = max_pool_backward(dout, maxpool_cache)
-
-    dout = relu_backward(dout, relu_cache)
-    dout, dgamma, dbeta = spatial_batchnorm_backward(dout, batchnorm_cache)
-    dx, dw, db = conv_backward_fast(dout, conv_cache)
-
-    return dx, dw, db, dgamma, dbeta
-
-
-def conv_batchnorm_relu_forward(x, w, b, conv_param, gamma, beta, bn_param):
-
-    out, conv_cache = conv_forward_fast(x, w, b, conv_param)
-    out, batchnorm_cache = spatial_batchnorm_forward(
-        out, gamma, beta, bn_param)
-    out, relu_cache = relu_forward(out)
-
-    cache = (conv_cache, batchnorm_cache, relu_cache)
-    return out, cache
-
-
-def conv_batchnorm_relu_backward(dout, cache):
-
-    conv_cache, batchnorm_cache, relu_cache = cache
-    dout = relu_backward(dout, relu_cache)
-    dout, dgamma, dbeta = spatial_batchnorm_backward(dout, batchnorm_cache)
-    dx, dw, db = conv_backward_fast(dout, conv_cache)
 
     return dx, dw, db, dgamma, dbeta
 
@@ -211,3 +166,78 @@ def conv_relu_pool_backward(dout, cache):
     da = relu_backward(ds, relu_cache)
     dx, dw, db = conv_backward_fast(da, conv_cache)
     return dx, dw, db
+
+def conv_batchnorm_relu_forward(x, w, b, conv_param, gamma, beta, bn_param):
+    '''
+    A convenience layer that performs a convolution followed by a batch
+    normalization, followed by a ReLU.
+
+    Inputs:
+    - x: Input to the convolutional layer
+    - w, b, conv_param: Weights and parameters for the convolutional layer
+    - gamma, beta, bn_param: Weights and parameters for the batch normalization
+    layer
+
+    Returns a tuple of:
+    - out: Output from the ReLU
+    - cache: Object to give to the backward pass
+    '''
+    out, conv_cache = conv_forward_fast(x, w, b, conv_param)
+    out, batchnorm_cache = spatial_batchnorm_forward(
+        out, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(out)
+
+    cache = (conv_cache, batchnorm_cache, relu_cache)
+    return out, cache
+
+
+def conv_batchnorm_relu_backward(dout, cache):
+    '''
+    Backward pass for the conv-batchnorm-relu convenience layer.
+    '''
+    conv_cache, batchnorm_cache, relu_cache = cache
+    dout = relu_backward(dout, relu_cache)
+    dout, dgamma, dbeta = spatial_batchnorm_backward(dout, batchnorm_cache)
+    dx, dw, db = conv_backward_fast(dout, conv_cache)
+
+    return dx, dw, db, dgamma, dbeta
+
+def conv_batchnorm_relu_pool_forward(x, w, b, conv_param, gamma, beta, bn_param, pool_param):
+    '''
+    A convenience layer that performs a convolution followed by a batch
+    normalization, followed by a ReLU, followed by a pooling layer.
+
+    Inputs:
+    - x: Input to the convolutional layer
+    - w, b, conv_param: Weights and parameters for the convolutional layer
+    - pool_param: parameters for the pooling layer
+    - gamma, beta, bn_param: Weights and parameters for the batch normalization
+    layer
+
+    Returns a tuple of:
+    - out: Output from the pool
+    - cache: Object to give to the backward pass
+    '''
+    out, conv_cache = conv_forward_fast(x, w, b, conv_param)
+    out, batchnorm_cache = spatial_batchnorm_forward(
+        out, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(out)
+    out, maxpool_cache = max_pool_forward(out, pool_param)
+
+    cache = (conv_cache, batchnorm_cache, relu_cache, maxpool_cache)
+    return out, cache
+
+
+def conv_batchnorm_relu_pool_backward(dout, cache):
+    '''
+    Backward pass for the conv-batchnorm-relu-pool convenience layer.
+    '''
+    conv_cache, batchnorm_cache, relu_cache, maxpool_cache = cache
+    dout = max_pool_backward(dout, maxpool_cache)
+
+    dout = relu_backward(dout, relu_cache)
+    dout, dgamma, dbeta = spatial_batchnorm_backward(dout, batchnorm_cache)
+    dx, dw, db = conv_backward_fast(dout, conv_cache)
+
+    return dx, dw, db, dgamma, dbeta
+

@@ -3,5 +3,4 @@ __all__ = [
     "layers",
     "utils",
     "optim",
-    "res_net",
     "solver"]

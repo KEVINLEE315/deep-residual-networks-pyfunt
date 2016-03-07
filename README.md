@@ -1,7 +1,7 @@
 # PyResNet
 Residual Network Implementation in Python + Numpy, Inspired by Stanfors's CS321N
 
- Implementation of ["Deep Residual Learning for Image Recognition",Kaiming
+Implementation of ["Deep Residual Learning for Image Recognition",Kaiming
 He, Xiangyu Zhang, Shaoqing Ren, Jian Sun](http://arxiv.org/abs/1512.03385)
 
 Inspired by https://github.com/gcr/torch-residual-networks and based on my [CS321n](http://cs231n.github.io/) solutions.
@@ -82,3 +82,53 @@ Each residual block is composed as below:
 	          Output
 
 After every layer, a batch normalization with momentum .1 is applied.
+
+# Experiments
+
+Model has 6*nSize+2 layers. 
+
+I have implemented residual network in a similiar way of gcr's torch implementation. I am using the figure 1 left scheme from https://github.com/gcr/torch-residual-networks#cifar-effect-of-model-architecture, the only little difference is that I apply the addition after the second relu, which means that the skip path is not normalized nor Rectified. I didn't found significance improvements using the other methods so I implemented in this way to mantain the most readablity for the code (using convenience conv_norm_relu layers). 
+
+I have trained the model for nSize = 1, 3 in the reference paper they started from nSize = 3 (20 convolution layers), so I was intrested to see how a resnet with nSize = 1	(8 convolution layers) performs in comparision with nSize = 3.
+
+Obviously in terms of computation times, the 20 layer network porforms ~3.1 times slower
+
+# Directory Structure
+.
++-- __init__.py
++-- nnet/
++-- res_net.py
++-- train.py
++-- requirements.txt
+
+# res_net.py
+
+Contains the residual network model.
+
+# train.py
+
+Contains the main loop.
+
+# requirements.txt
+
+Requirements for the project.
+
+# subdirs
+
+Check the README.md found in all sub directories
+
+# Requirements
+
+	- [Python 2.7](https://www.python.org/)
+	- [Cython](cython.org/)
+	- [matplotlib](matplotlib.org/)
+	- [numpy](www.numpy.org/)
+	- [scipy](www.scipy.org/)
+	- [cv2](opencv.org) (only for loading GTSRB)
+	- [scikit_learn](scikit-learn.org/)
+
+After you get Python, you can get [pip](https://pypi.python.org/pypi/pip) and install all requirements by running:
+	
+	pip install -r /path/to/requirements.txt
+
+

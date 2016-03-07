@@ -19,7 +19,7 @@ __author__ = "Michael Beyeler"
 __license__ = "GNU GPL 3.0 or later"
 
 
-def load_data(rootpath="datasets/gtsrb_training", feature=None, cut_roi=True,
+def get_GTSRB_data(rootpath="datasets/gtsrb_training", feature=None, cut_roi=True,
               test_split=0.2, plot_samples=False, seed=113):
     """Loads the GTSRB dataset
         This function loads the German Traffic Sign Recognition Benchmark

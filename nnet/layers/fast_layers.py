@@ -5,7 +5,7 @@ import numpy as np
 try:
     from nnet.layers.im2col_cython import col2im_6d_cython, col2im_cython, im2col_cython
 except ImportError:
-    print 'run the following from the nnet directory and try again:'
+    print 'run the following from this directory and try again:'
     print 'python setup.py build_ext --inplace'
     print 'You may also need to restart your iPython kernel'
 

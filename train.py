@@ -3,9 +3,9 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from nnet.res_net import *
+from res_net import ResNet
 from nnet.data.data_utils import *
-from nnet.data.data_augmentation import *
+from nnet.data.data_augmentation import random_flips, add_pad, random_crops
 # from nnet.gradient_check import eval_numerical_gradient, eval_numerical_gradient_array
 from nnet.solver import Solver as Solver
 import matplotlib.pyplot as plt
@@ -64,8 +64,7 @@ if __name__ == '__main__':
                     verbose=True, print_every=100,
                     custom_update_ld=custom_update_decay,
                     batch_augment_func=data_augm,
-                    path=name,
-                    check_point_every=20,
+                      check_point_every=20,
                     num_processes=1)
 
 

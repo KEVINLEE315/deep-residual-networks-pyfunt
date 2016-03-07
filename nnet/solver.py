@@ -12,6 +12,11 @@ from types import MethodType
 
 
 def _pickle_method(method):
+    '''
+    Helper for multiprocessing ops, for more infos, check answer and comments
+    here:
+    http://stackoverflow.com/a/1816969/1142814
+    '''
     func_name = method.im_func.__name__
     obj = method.im_self
     cls = method.im_class
@@ -19,6 +24,11 @@ def _pickle_method(method):
 
 
 def _unpickle_method(func_name, obj, cls):
+    '''
+    Helper for multiprocessing ops, for more infos, check answer and comments
+    here:
+    http://stackoverflow.com/a/1816969/1142814
+    '''
     for cls in cls.mro():
         try:
             func = cls.__dict__[func_name]
@@ -30,6 +40,9 @@ def _unpickle_method(func_name, obj, cls):
 
 
 def init_worker():
+    '''
+    Permit to interrupt all processes trough ^C.
+    '''
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
@@ -114,7 +127,8 @@ class Solver(object):
           'y_train': Array of shape (N_train,) giving labels for training images
           'y_val': Array of shape (N_val,) giving labels for validation images
 
-        Optional arguments:
+        Optional arguments: Arguments you find in the Stanford's
+        cs231n assignments' Solver
         - update_rule: A string giving the name of an update rule in optim.py.
           Default is 'sgd'.
         - optim_config: A dictionary containing hyperparameters that will be
@@ -130,6 +144,23 @@ class Solver(object):
           iterations.
         - verbose: Boolean; if set to false then no output will be printed during
           training.
+        Custom arguments:
+        - load_dir: root directory for the checkpoints folder, if is not False,
+          the instance tries to load the most recent checkpoint found in load_dir.
+        - path_checkpoints: root directory where the checkpoints folder resides.
+        - check_point_every: save a checkpoint every check_point_every epochs.
+        - custom_update_ld: optional function to update the learning rate decay
+          parameter, if not False the instruction
+          self.lr_decay = custom_update_ld(self.epoch) is executed at the and
+          of each epoch.
+        - batch_augment_func: optional function to augment the batch data.
+          If not False X_batch = batch_augment_func(X_batch) is called before
+          each training step.
+        - num_processes: optional number of parallel processes for each
+          training step. If not 1, at each training/accuracy_check step, each
+          batch is divided by the number of processes and losses (and grads)
+          are computed in parallel when all processes finish we compute the
+          mean for the loss (and grads) and continue as usual.
         '''
 
         self.model = model
@@ -148,7 +179,6 @@ class Solver(object):
         self.verbose = kwargs.pop('verbose', True)
 
         # Personal Edits
-        self.path = kwargs.pop('path', '')
         self.load_dir = kwargs.pop('load_dir', False)
         self.path_checkpoints = kwargs.pop('path_checkpoints', 'checkpoints')
         self.check_point_every = kwargs.pop('check_point_every', 0)
@@ -391,7 +421,7 @@ class Solver(object):
                 if self.verbose:
                     mean_secs_per_batch = sum(
                         secs_per_batch[-self.print_every:])/len(secs_per_batch[-self.print_every:])  # last check mean
-                    print '%s: Step %d, loss: %.3f train acc: %.3f; val_acc: %.3f (%.2f sec/batch)' % (
+                    print '%s: Step %d, loss: %.3f train acc: %.3f; val_acc: %.3f (%.2f sec/It.)' % (
                         str(datetime.now()), t + 1, self.loss_history[-1], train_acc, val_acc, mean_secs_per_batch)
 
                 self.train_acc_history.append(train_acc)
@@ -428,4 +458,6 @@ class Solver(object):
         self.pool.terminate()
         self.pool.join()
 
+
+# again, check http://stackoverflow.com/a/1816969/1142814 and comments
 pickle(MethodType, _pickle_method, _unpickle_method)

@@ -35,6 +35,15 @@ def sgd_th(w, dw, config=None):
     Performs stochastic gradient descent with nesterov momentum,
     like Torch's optim.sgd:
     https://github.com/torch/optim/blob/master/sgd.lua
+
+    config format:
+    - learning_rate: Scalar learning rate.
+    - momentum: Scalar between 0 and 1 giving the momentum value.
+      Setting momentum = 0 reduces to sgd.
+    - nesterov: Boolean to indicate if nesterov momentum should be applied
+    - dampening: default equal to momentum.
+    - weight_decay: apply weight_decay in place.
+    - state_dw: stored gradients for the next update.
     '''
     if config is None:
         config = {}
