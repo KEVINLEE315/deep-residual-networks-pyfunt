@@ -1,4 +1,4 @@
-# ./nnet/ Directory
+## ./nnet/ Directory
 
 In this folder contains solutions for cs231n assignments and some other cool staff.
 
