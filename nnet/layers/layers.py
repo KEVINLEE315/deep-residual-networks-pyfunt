@@ -393,6 +393,7 @@ def softmax_loss(x, y):
 def max_pool_forward_naive(x, pool_param):
     '''
     A naive implementation of the forward pass for a max pooling layer.
+    source: https://github.com/MyHumbleSelf/cs231n/blob/master/assignment2/cs231n/layers.py
 
     Inputs:
     - x: Input data, of shape (N, C, H, W)
@@ -435,6 +436,7 @@ def max_pool_forward_naive(x, pool_param):
 def max_pool_backward_naive(dout, cache):
     '''
     A naive implementation of the backward pass for a max pooling layer.
+    source: https://github.com/MyHumbleSelf/cs231n/blob/master/assignment2/cs231n/layers.py
 
     Inputs:
     - dout: Upstream derivatives
@@ -475,6 +477,7 @@ def max_pool_backward_naive(dout, cache):
 def avg_pool_forward_naive(x, pool_param):
     '''
     A naive implementation of the forward pass for a avg pooling layer.
+    source: https://github.com/MyHumbleSelf/cs231n/blob/master/assignment2/cs231n/layers.py
 
     Inputs:
     - x: Input data, of shape (N, C, H, W)
@@ -517,6 +520,7 @@ def avg_pool_forward_naive(x, pool_param):
 def avg_pool_backward_naive(dout, cache):
     '''
     A naive implementation of the backward pass for a avg pooling layer.
+    source: https://github.com/MyHumbleSelf/cs231n/blob/master/assignment2/cs231n/layers.py
 
     Inputs:
     - dout: Upstream derivatives
@@ -557,6 +561,7 @@ def avg_pool_backward_naive(dout, cache):
 def conv_forward_naive(x, w, b, conv_param):
     '''
     A naive implementation of the forward pass for a convolutional layer.
+    source: https://github.com/MyHumbleSelf/cs231n/blob/master/assignment2/cs231n/layers.py
 
     The input consists of N data points, each with C channels, height H and width
     W. We convolve each input with F different filters, where each filter spans
@@ -613,6 +618,7 @@ def conv_forward_naive(x, w, b, conv_param):
 def conv_backward_naive(dout, cache):
     '''
     A naive implementation of the backward pass for a convolutional layer.
+    source: https://github.com/MyHumbleSelf/cs231n/blob/master/assignment2/cs231n/layers.py
 
     Inputs:
     - dout: Upstream derivatives.
