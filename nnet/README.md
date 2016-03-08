@@ -1,4 +1,4 @@
-## ./nnet/ Directory
+# ./nnet/ Directory
 
 In this folder contains solutions for cs231n assignments and some other cool staff.
 
@@ -11,7 +11,7 @@ In this folder contains solutions for cs231n assignments and some other cool sta
 	+-- layers/
 	+-- data/
 
-# optim.py
+## optim.py
 
 Contains various first-order update rules that are commonly used for training neural networks:
 
@@ -30,19 +30,19 @@ Contains various first-order update rules that are commonly used for training ne
 	adam update rule, which incorporates moving averages of both the
 	gradient and its square and a bias correction term.
 
-# solver.py
+## solver.py
 
 Contains the Solver class, which is the trainer for your networks, plus some function to permit training with multiple processes.
 
-# utils/
+## utils/
 
 Check utils/README.md
 
-# layers/
+## layers/
 
 Check layers/README.md
 
-# data/
+## data/
 
 Check data/README.md
 
