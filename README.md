@@ -104,22 +104,22 @@ I all the experiments I use the following training configuration (more or less t
 
 batch size varies from 50 to 128 and processes from 1 to 8, but they should not influence the final accuracy.
 
-# Effects of Network Size
+## Effects of Network Size
 
 
-# Effects of Data Augmentation
+## Effects of Data Augmentation
 
 I also wanted to see the difference in accuracy and loss when we augment the dataset by adding n white pixels on each side of each image (and random cropping 32x32 images before each step), with n euqal to 2 and 4 (the authors use n=4), for both nSize = 1, 3.
 
 In all cases I also applied random mirroring like gcr's implementation.
 
-# Weight Visualization
+## Weight Visualization
 
-# Images not recognized
+## Images not recognized
 
-# Fooling the Network
+## Fooling the Network
 
-# Directory Structure
+## Directory Structure
 	.
 	+-- __init__.py
 	+-- nnet/
@@ -127,23 +127,23 @@ In all cases I also applied random mirroring like gcr's implementation.
 	+-- train.py
 	+-- requirements.txt
 
-# res_net.py
+### res_net.py
 
 Contains the residual network model.
 
-# train.py
+### train.py
 
 Contains the main loop.
 
-# requirements.txt
+### requirements.txt
 
 Requirements for the project.
 
-# subdirs
+## subdirs
 
 Check the README.md found in all sub directories
 
-# Requirements
+## Requirements
 
 - [Python 2.7](https://www.python.org/)
 - [Cython](cython.org/)
