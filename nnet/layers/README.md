@@ -1,8 +1,8 @@
-## ./nnet/layers Directory
+# ./nnet/layers Directory
 
 In this folder you will find everything you need to load and use yor datasets.
 
-# Directory Structure
+## Directory Structure
 	.
 	+-- __init__.py
 	+-- fast_layers.py
@@ -14,7 +14,7 @@ In this folder you will find everything you need to load and use yor datasets.
 	+-- README.md
 	+-- setup.py
 
-# fast_layers.py
+## fast_layers.py
 
 Fast implementations of forward/backward pass for:
 
@@ -43,15 +43,15 @@ Fast implementations of forward/backward pass for:
 		A faster implementation of the forward pass for a avg pool layer
 		based on reshaping and broadcasting.
 
-# im2col.py
+## im2col.py
 
 Helper functions to use is fast_layers.py: check [http://cs231n.github.io/convolutional-networks/](http://cs231n.github.io/convolutional-networks/) for more infos
 
-# im2col_cython.pyx
+## im2col_cython.pyx
 
 Helper functions to use is fast_layers.py: check [http://cs231n.github.io/convolutional-networks/](http://cs231n.github.io/convolutional-networks/) for more infos
 
-# init.py
+## init.py
 
 Weight initialization:
 
@@ -61,7 +61,7 @@ Weight initialization:
 - Initialize batch normalization layer's weights like torch's default by calling init_bn_w
 - Initialize batch normalization layer's weights like cgr's first resblock's bn ([https://github.com/gcr/torch-residual-networks/blob/master/residual-layers.lua#L57-L59](https://github.com/gcr/torch-residual-networks/blob/master/residual-layers.lua#L57-L59)) by calling init_bn_w_gcr.
 
-# layer_utils.py
+## layer_utils.py
 
 Convenience layers definitions:
 
@@ -80,7 +80,7 @@ Convenience layers definitions:
 - conv_batchnorm_relu_pool:
 	a convolution followed by a batch normalization, followed by a ReLU, followed by a pooling layer
 
-# layers.py
+## layers.py
 
 Layers definitions:
 
@@ -101,7 +101,7 @@ Layers definitions:
 - softmax_loss:
 	computes the softmax loss and gradient. This is the default implementations for the cs231n class;
 
-# setup.py
+## setup.py
 
 File neede to compile the im2col_cython.pyx so it can produce the .c extension file to load in fast_layers.py. to build the needed im2col_cython.c run:
 	
