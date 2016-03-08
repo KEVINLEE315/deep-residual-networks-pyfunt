@@ -173,10 +173,10 @@ class ResNet(object):
         return """
         Residual Network:
             NSize: %d;
-            Numbers of filters for each layer:\n %d;
+            Numbers of filters for each layer:%s;
             Optional linear layers dimensions: %s;
         """ % (self.n_size,
-               self.num_filters[0],
+               str(self.num_filters),
                str(self.hidden_dims))
 
     def _init_filters(self, nf):
