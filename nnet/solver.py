@@ -199,7 +199,7 @@ class Solver(object):
 
         self._reset()
         if self.load_dir:
-            self.load_current_checkpoints()
+            self.load_current_checkpoint()
 
     def __str__(self):
         return """
@@ -267,7 +267,8 @@ class Solver(object):
             y_batches = np.array_split(y_batch, n)
             try:
                 job_args = [(X_batches[i], y_batches[i]) for i in range(n)]
-                results = pool.map_async(self.model.loss_helper, job_args).get()
+                results = pool.map_async(
+                    self.model.loss_helper, job_args).get()
                 losses, gradses = [], []
                 i = 0
                 for r in results:
@@ -294,7 +295,7 @@ class Solver(object):
             self.model.params[p] = next_w
             self.optim_configs[p] = next_config
 
-    def load_current_checkpoints(self):
+    def load_current_checkpoint(self):
         '''
         Return the current checkpoint
         '''
@@ -335,7 +336,7 @@ class Solver(object):
         joblib.dump(checkpoints, os.path.join(
             directory, name + '.pkl'))
 
-    def check_accuracy(self, X, y, num_samples=None, batch_size=100):
+    def check_accuracy(self, X, y=None, num_samples=None, batch_size=100, return_preds=False):
         '''
         Check accuracy of the model on the provided data.
 
@@ -351,6 +352,7 @@ class Solver(object):
         - acc: Scalar giving the fraction of instances that were correctly
           classified by the model.
         '''
+        assert (y is None and return_preds) or not(y is None and return_preds)
 
         # Maybe subsample the data
         N = X.shape[0]
@@ -377,7 +379,8 @@ class Solver(object):
             else:
                 X_subs = np.array_split(X[start:end], self.num_processes)
                 try:
-                    results = self.pool.map_async(self.model.loss, X_subs).get()
+                    results = self.pool.map_async(
+                        self.model.loss, X_subs).get()
                     for r in results:
                         y_pred.append(np.argmax(r, axis=1))
                 except Exception, e:
@@ -386,6 +389,8 @@ class Solver(object):
                     raise e
 
         y_pred = np.hstack(y_pred)
+        if return_preds:
+            return y_pred
         acc = np.mean(y_pred == y)
 
         return acc
@@ -399,20 +404,21 @@ class Solver(object):
         num_iterations = int(self.num_epochs * iterations_per_epoch)
         print 'Training for %d epochs, or %d iterations.' % (self.num_epochs, num_iterations)
         secs_per_batch = []
-        for t in xrange(num_iterations):
+        for it in xrange(num_iterations):
             t0 = time.time()
             self._step()
             secs_per_batch.append(time.time() - t0)
 
             # At the end of every epoch, increment the epoch counter and decay the
             # learning rate.
-            epoch_end = (t + 1) % iterations_per_epoch == 0
+            epoch_end = (it + 1) % iterations_per_epoch == 0
 
             # Check train and val accuracy on the first iteration, the last
             # iteration, and at the end of each epoch.
-            first_it = (t == 0)
-            last_it = (t == num_iterations + 1)
-            if first_it or last_it or epoch_end or (self.verbose and t % self.print_every == 0):
+            first_it = (it == 0)
+            last_it = (it == num_iterations + 1)
+            verbose = self.verbose and (it + 1) % self.print_every == 0
+            if first_it or last_it or epoch_end or verbose:
                 train_acc = self.check_accuracy(self.X_train, self.y_train,
                                                 num_samples=1000)
                 val_acc = self.check_accuracy(self.X_val, self.y_val)
@@ -422,7 +428,7 @@ class Solver(object):
                     mean_secs_per_batch = sum(
                         secs_per_batch[-self.print_every:])/len(secs_per_batch[-self.print_every:])  # last check mean
                     print '%s: Step %d, loss: %.3f train acc: %.3f; val_acc: %.3f (%.2f sec/It.)' % (
-                        str(datetime.now()), t + 1, self.loss_history[-1], train_acc, val_acc, mean_secs_per_batch)
+                        str(datetime.now()), it + 1, self.loss_history[-1], train_acc, val_acc, mean_secs_per_batch)
 
                 self.train_acc_history.append(train_acc)
                 self.val_acc_history.append(val_acc)
