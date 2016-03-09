@@ -115,7 +115,7 @@ class Solver(object):
         names to gradients of the loss with respect to those parameters.
     '''
 
-    def __init__(self, model, data,  **kwargs):
+    def __init__(self, model, data=None, load_dir=None, **kwargs):
         '''
         Construct a new Solver instance.
 
@@ -162,12 +162,13 @@ class Solver(object):
           are computed in parallel when all processes finish we compute the
           mean for the loss (and grads) and continue as usual.
         '''
-
+        assert (data and model) or load_dir
         self.model = model
-        self.X_train = data['X_train']
-        self.y_train = data['y_train']
-        self.X_val = data['X_val']
-        self.y_val = data['y_val']
+        if data:
+            self.X_train = data['X_train']
+            self.y_train = data['y_train']
+            self.X_val = data['X_val']
+            self.y_val = data['y_val']
 
         # Unpack keyword arguments
         self.update_rule = kwargs.pop('update_rule', 'sgd')
@@ -179,7 +180,6 @@ class Solver(object):
         self.verbose = kwargs.pop('verbose', True)
 
         # Personal Edits
-        self.load_dir = kwargs.pop('load_dir', False)
         self.path_checkpoints = kwargs.pop('path_checkpoints', 'checkpoints')
         self.check_point_every = kwargs.pop('check_point_every', 0)
         self.custom_update_ld = kwargs.pop('custom_update_ld', False)
@@ -196,9 +196,9 @@ class Solver(object):
         if not hasattr(optim, self.update_rule):
             raise ValueError('Invalid update_rule "%s"' % self.update_rule)
         self.update_rule = getattr(optim, self.update_rule)
-
         self._reset()
-        if self.load_dir:
+        if load_dir:
+            self.load_dir = load_dir
             self.load_current_checkpoint()
 
     def __str__(self):
@@ -299,22 +299,25 @@ class Solver(object):
         '''
         Return the current checkpoint
         '''
-        checkpoints = os.listdir(self.load_dir)
-        try:
-            num = max([int(f.split('_')[1]) for f in checkpoints])
-            name = 'check_' + str(num)
-            cp = joblib.load(
-                os.path.join(self.path_checkpoints, name, name + '.pkl'))
-            # Set up some variables for book-keeping
-            self.epoch = cp['epoch']
-            self.best_val_acc = cp['best_val_acc']
-            self.best_params = cp['best_params']
-            self.loss_history = cp['loss_history']
-            self.train_acc_history = cp['train_acc_history']
-            self.val_acc_history = cp['val_acc_history']
-        except:
-            'no checkpoints found, starting from zero'
-            self._reset()
+        checkpoints = [f for f in os.listdir(
+                self.load_dir) if not f.startswith('.')]
+
+        #try:
+        num = max([int(f.split('_')[1]) for f in checkpoints])
+        name = 'check_' + str(num)
+        cp = joblib.load(
+            os.path.join(self.path_checkpoints, name, name + '.pkl'))
+        # Set up some variables for book-keeping
+
+        self.epoch = cp['epoch']
+        self.best_val_acc = cp['best_val_acc']
+        self.best_params = cp['best_params']
+        self.loss_history = cp['loss_history']
+        self.train_acc_history = cp['train_acc_history']
+        self.val_acc_history = cp['val_acc_history']
+
+        # except Exception, e:
+        #     raise e
 
     def make_check_point(self):
         '''
@@ -335,6 +338,13 @@ class Solver(object):
             os.makedirs(directory)
         joblib.dump(checkpoints, os.path.join(
             directory, name + '.pkl'))
+
+    def export_data(self):
+        numpy.save('model', self.model.params)
+        i = np.arange(len(self.loss_history))
+        z = np.array(zip(i, i*self.batch_size, self.loss_history))
+        import pdb; pdb.set_trace()
+        np.savetxt('loss_history.csv', z, delimiter=',', fmt=['%d', '%d', '%f'], header=['iteration, n_images, loss'])
 
     def check_accuracy(self, X, y=None, num_samples=None, batch_size=100, return_preds=False):
         '''
@@ -417,7 +427,8 @@ class Solver(object):
             # iteration, and at the end of each epoch.
             first_it = (it == 0)
             last_it = (it == num_iterations + 1)
-            verbose = self.verbose and (it + 1) % self.print_every == 0
+
+            verbose = self.print_every and (it + 1) % self.print_every == 0
             if first_it or last_it or epoch_end or verbose:
                 train_acc = self.check_accuracy(self.X_train, self.y_train,
                                                 num_samples=1000)

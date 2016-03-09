@@ -14,7 +14,7 @@ from nnet.solver import Solver as Solver
 import inspect
 
 # residual network constants
-NSIZE = 1
+NSIZE = 3
 N_STARTING_FILTERS = 16
 
 # solver constants
@@ -23,10 +23,12 @@ WEIGHT_DEACY = 1e-4
 LEARNING_RATE = .1
 MOMENTUM = .9
 NUM_EPOCHS = 160
-BATCH_SIZE = 50
+BATCH_SIZE = 128
 CHECK_POINT_EVERY = 20
 VERBOSE = True
-PRINT_EVERY = 100
+PRINT_EVERY = False
+
+XH, XW = 32, 32
 
 assert(VERBOSE and PRINT_EVERY) or not(VERBOSE and PRINT_EVERY)
 
@@ -52,9 +54,11 @@ def rel_error(x, y): return np.max(
 
 
 def data_augm(batch):
+    p = 4
+    h, w = XH, XW
     batch = random_flips(batch)
-    batch = add_pad(batch, 4)
-    batch = random_crops(batch, (32, 32))
+    batch = add_pad(batch, p)
+    batch = random_crops(batch, (h, w))
     return batch
 
 
@@ -105,6 +109,8 @@ def main():
 
     pretty_print(solver)
     solver.train()
+    solver.export_data()
+
     print 'finish'
 
     import pdb
