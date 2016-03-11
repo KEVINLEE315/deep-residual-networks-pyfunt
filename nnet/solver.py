@@ -9,7 +9,7 @@ import multiprocessing as mp
 import signal
 from copy_reg import pickle
 from types import MethodType
-
+import sys
 
 def _pickle_method(method):
     '''
@@ -162,7 +162,6 @@ class Solver(object):
           are computed in parallel when all processes finish we compute the
           mean for the loss (and grads) and continue as usual.
         '''
-        assert (data and model) or load_dir
         self.model = model
         if data:
             self.X_train = data['X_train']
@@ -300,9 +299,9 @@ class Solver(object):
         Return the current checkpoint
         '''
         checkpoints = [f for f in os.listdir(
-                self.load_dir) if not f.startswith('.')]
+            self.load_dir) if not f.startswith('.')]
 
-        #try:
+        # try:
         num = max([int(f.split('_')[1]) for f in checkpoints])
         name = 'check_' + str(num)
         cp = joblib.load(
@@ -315,6 +314,7 @@ class Solver(object):
         self.loss_history = cp['loss_history']
         self.train_acc_history = cp['train_acc_history']
         self.val_acc_history = cp['val_acc_history']
+        self.model = cp['model']
 
         # except Exception, e:
         #     raise e
@@ -339,12 +339,14 @@ class Solver(object):
         joblib.dump(checkpoints, os.path.join(
             directory, name + '.pkl'))
 
-    def export_data(self):
-        numpy.save('model', self.model.params)
-        i = np.arange(len(self.loss_history))
+    def export_model(self, path):
+        np.save('%smodel' % path, self.model.params)
+
+    def export_loss(self, path):
+        i = np.arange(len(self.loss_history)) + 1
         z = np.array(zip(i, i*self.batch_size, self.loss_history))
-        import pdb; pdb.set_trace()
-        np.savetxt('loss_history.csv', z, delimiter=',', fmt=['%d', '%d', '%f'], header=['iteration, n_images, loss'])
+        np.savetxt('%sloss_history.csv' % path, z, delimiter=',', fmt=[
+                   '%d', '%d', '%f'], header='iteration, n_images, loss')
 
     def check_accuracy(self, X, y=None, num_samples=None, batch_size=100, return_preds=False):
         '''
@@ -410,7 +412,7 @@ class Solver(object):
         Run optimization to train the model.
         '''
         num_train = self.X_train.shape[0]
-        iterations_per_epoch = max(num_train / self.batch_size, 1)
+        iterations_per_epoch = num_train / self.batch_size + 1
         num_iterations = int(self.num_epochs * iterations_per_epoch)
         print 'Training for %d epochs, or %d iterations.' % (self.num_epochs, num_iterations)
         secs_per_batch = []
@@ -456,7 +458,7 @@ class Solver(object):
                         self.epoch, self.num_epochs, self.best_val_acc)
 
             if epoch_end:
-
+                sys.stdout.write('\a')  # emit sound
                 self.epoch += 1
                 lr_decay_updated = False
                 if self.custom_update_ld:
