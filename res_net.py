@@ -12,7 +12,7 @@ from nnet.layers.layer_utils import skip_forward, skip_backward
 from nnet.layers.layer_utils import avg_pool_forward
 from nnet.layers.layer_utils import avg_pool_backward
 from nnet.layers.layer_utils import affine_forward, affine_backward
-from nnet.layers.init import init_conv_w_kaiming, init_bn_w_gcr
+from nnet.layers.init import init_conv_w_kaiming, init_bn_w_gcr, init_bn_w
 from nnet.layers.init import init_affine_wb
 
 
@@ -32,8 +32,9 @@ class ResNet(object):
     consisting of N images, each with height H and width W and with C input
     channels.
 
-    The network has, like in the reference paper, (6*n)+2 layers,
-    composed as below:
+    The network has, like in the reference paper (except for the final optional
+    affine layers), (6*n)+2 layers, composed as below:
+
                                                 (image_dim: 3, 32, 32; F=16)
                                                 (input_dim: N, *image_dim)
          INPUT
@@ -72,6 +73,11 @@ class ResNet(object):
        +-------------+
        |pool[1, 8, 8]|                          (out_shape: N, 64, 1, 1)
        +-------------+
+            |
+            v
+       +- - - - - - - - -+
+       |(opt) m * affine |                      (out_shape: N, 64, 1, 1)
+       +- - - - - - - - -+
             |
             v
        +-------+
@@ -124,8 +130,8 @@ class ResNet(object):
 
     '''
 
-    def __init__(self, input_dim=(3, 32, 32), num_starting_filters=16, n_size=1,
-                 hidden_dims=[], num_classes=10, reg=0.0, dtype=np.float32):
+    def __init__(self, n_size=1, input_dim=(3, 32, 32), num_starting_filters=16,
+                 hidden_dims=[], num_classes=10, reg=0.0, weights=None, dtype=np.float32):
         '''
         num_filters=[16, 16, 32, 32, 64, 64],
         Initialize a new network.
@@ -161,6 +167,11 @@ class ResNet(object):
 
         self.h_dims = (
             [hidden_dims[0]] if len(hidden_dims) > 0 else []) + hidden_dims
+
+        if weights:
+            for k, v in weights.iteritems():
+                self.params[k] = v.astype(dtype)
+            return
 
         self._init_affine_weights()
 
@@ -222,7 +233,7 @@ class ResNet(object):
             bn_param = {'mode': 'train',
                         'running_mean': np.zeros(out_ch),
                         'running_var': np.ones(out_ch)}
-            gamma = init_bn_w_gcr(out_ch)
+            gamma = init_bn_w(out_ch)
             beta = np.zeros(out_ch)
             self.bn_params['bn_param%d' % idx] = bn_param
             self.params['gamma%d' % idx] = gamma
@@ -276,7 +287,7 @@ class ResNet(object):
         '''
         return self.loss(*args)
 
-    def loss(self, X, y=None):
+    def loss(self, X, y=None, compute_dX=False, return_probs=False):
         '''
         TODO: split in _functions
         Evaluate loss and gradient for the three-layer convolutional network.
@@ -343,6 +354,8 @@ class ResNet(object):
             bn_param = self.bn_params['bn_param%d' % idx]
             h, cache_h = affine_batchnorm_relu_forward(h, w, b, gamma,
                                                        beta, bn_param)
+            blocks['h%d' % idx] = h
+            blocks['cache_h%d' % idx] = cache_h
 
         # Fnally Forward into the score
         idx = self.L + self.M + 2
@@ -356,6 +369,11 @@ class ResNet(object):
         scores = blocks['h%d' % idx]
 
         if y is None:
+            if return_probs:
+                probs = np.exp(scores - np.max(scores, axis=1, keepdims=True))
+                probs /= np.sum(probs, axis=1, keepdims=True)
+                return probs
+
             return scores
 
         loss, grads = 0, {}
@@ -388,6 +406,9 @@ class ResNet(object):
                 dh, h_cache)
             blocks['dbeta%d' % idx] = dbeta
             blocks['dgamma%d' % idx] = dgamma
+            blocks['dh%d' % (idx - 1)] = dh
+            blocks['dW%d' % idx] = dw
+            blocks['db%d' % idx] = db
 
         # back pool
         idx = self.L + 1
@@ -424,6 +445,9 @@ class ResNet(object):
             blocks['dh%d' % (idx - 1)] = dh
             blocks['dW%d' % idx] = dw
             blocks['db%d' % idx] = db
+
+        if compute_dX:
+            return blocks['dh0']
 
         # w gradients where we add the regulariation term
         list_dw = {key[1:]: val + self.reg * params[key[1:]]

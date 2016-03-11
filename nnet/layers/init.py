@@ -45,7 +45,7 @@ def init_bn_w(n_ch):
     mode, for more infos:
     https://github.com/torch/nn/blob/master/BatchNormalization.lua
     '''
-    return np.random.uniform(n_ch)
+    return np.random.uniform(size=n_ch)
 
 def init_bn_w_gcr(n_ch):
     '''
