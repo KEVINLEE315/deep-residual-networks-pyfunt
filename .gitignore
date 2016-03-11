@@ -12,7 +12,10 @@ checkpoints/
 
 # datasets
 cifar-10-batches-py/
-GTSRB/
+gtsrb/
+
+# notebooks
+noteboook/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
