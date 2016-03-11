@@ -4,7 +4,7 @@
 import numpy as np
 # import matplotlib.pyplot as plt
 from nnet.data.data_utils import get_CIFAR10_data
-from nnet.data.data_augmentation import random_flips, add_pad, random_crops
+from nnet.data.data_augmentation import random_tint, random_contrast, random_flips, add_pad, random_crops
 from res_net import ResNet
 from nnet.solver import Solver as Solver
 
@@ -15,10 +15,22 @@ import inspect
 
 # residual network constants
 NSIZE = 3
+
+'''
+        .___          /\ __      __                       .__        __  .__    .__
+      __| _/____   ___)//  |_  _/  |_  ____  __ __   ____ |  |__   _/  |_|  |__ |__| ______
+     / __ |/  _ \ /    \   __\ \   __\/  _ \|  |  \_/ ___\|  |  \  \   __\  |  \|  |/  ___/
+    / /_/ (  <_> )   |  \  |    |  | (  <_> )  |  /\  \___|   Y  \  |  | |   Y  \  |\___ \
+    \____ |\____/|___|  /__|    |__|  \____/|____/  \___  >___|  /  |__| |___|  /__/____  >
+         \/           \/                                \/     \/             \/        \/
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+'''
 N_STARTING_FILTERS = 16
 
 # solver constants
 NUM_PROCESSES = 4
+
 WEIGHT_DEACY = 1e-4
 LEARNING_RATE = .1
 MOMENTUM = .9
@@ -43,19 +55,11 @@ DATA = {
     'y_val': DATA['y_test'],
 }
 
-# plt.rcParams['figure.figsize'] = (10.0, 8.0)  # set default size of plots
-# plt.rcParams['image.interpolation'] = 'nearest'
-# plt.rcParams['image.cmap'] = 'gray'
-
-
-def rel_error(x, y): return np.max(
-    np.abs(x - y) / (np.maximum(1e-6, np.abs(x) + np.abs(y))))
-
-
-
 def data_augm(batch):
-    p = 4
+    p = 2
     h, w = XH, XW
+    batch = random_tint(batch)
+    batch = random_contrast(batch)
     batch = random_flips(batch)
     batch = add_pad(batch, p)
     batch = random_crops(batch, (h, w))
@@ -80,7 +84,8 @@ def pretty_print(solver):
 
 
 def main():
-    model = ResNet(n_size=NSIZE, num_starting_filters=N_STARTING_FILTERS)
+    model = ResNet(
+        n_size=NSIZE, num_starting_filters=N_STARTING_FILTERS, hidden_dims=[64,64], dtype=np.float32)
 
     wd = WEIGHT_DEACY
     lr = LEARNING_RATE
@@ -92,7 +97,7 @@ def main():
     data = DATA
     epochs = NUM_EPOCHS
     bs = BATCH_SIZE
-    np = NUM_PROCESSES
+    nump = NUM_PROCESSES
     cp = CHECK_POINT_EVERY
     v = VERBOSE
     pe = PRINT_EVERY
@@ -105,11 +110,12 @@ def main():
                     custom_update_ld=custom_update_decay,
                     batch_augment_func=data_augm,
                     check_point_every=cp,
-                    num_processes=np)
+                    num_processes=nump)
 
     pretty_print(solver)
     solver.train()
-    solver.export_data()
+    solver.export_model()
+    solver.export_loss()
 
     print 'finish'
 
