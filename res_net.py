@@ -158,8 +158,11 @@ class ResNet(object):
         self.filter_size = 3
 
         self.num_filters = self._init_filters(num_starting_filters)
-        self.L = len(self.num_filters)  # Number of convs
-        self.M = len(hidden_dims)  # Number of affines
+        self.conv_layers = len(self.num_filters)
+        self.affine_layers = len(hidden_dims)
+        self.pool_l = self.conv_layers + 1
+        self.softmax_l = self.conv_layers + self.affine_layers + 2
+        self.affine_l = self.conv_layers + 2
 
         self._init_conv_weights()
 
@@ -222,7 +225,7 @@ class ResNet(object):
 
         # Initialize the weight for the conv layers
         F = [Cinput] + self.num_filters
-        for i in xrange(self.L):
+        for i in xrange(self.conv_layers):
             idx = i + 1
             shape = F[i + 1], F[i], filter_size, filter_size
             out_ch = shape[0]
@@ -240,7 +243,7 @@ class ResNet(object):
             self.params['beta%d' % idx] = beta
 
         # Initialize conv/pools parameters
-        self.conv_param = {'stride': 1, 'pad': (filter_size - 1) / 2}
+        self.conv_param1 = {'stride': 1, 'pad': (filter_size - 1) / 2}
         self.conv_param2 = {'stride': 2, 'pad': 0}
         self.pool_param1 = {'pool_height': 2, 'pool_width': 2, 'stride': 2}
 
@@ -250,8 +253,8 @@ class ResNet(object):
         Called by self.__init__
         '''
         dims = self.h_dims
-        for i in xrange(self.M):
-            idx = self.L + i + 2
+        for i in xrange(self.affine_layers):
+            idx = self.affine_l + i
             shape = dims[i], dims[i + 1]
             out_ch = shape[1]
             W, b = init_affine_wb(shape)
@@ -276,7 +279,7 @@ class ResNet(object):
             len(self.h_dims) > 0 else self.num_filters[-1]
         shape = in_ch, num_classes
         W, b = init_affine_wb(shape)
-        i = self.L + self.M + 2
+        i = self.softmax_l
         self.params['W%d' % i] = W
         self.params['b%d' % i] = b
 
@@ -296,29 +299,30 @@ class ResNet(object):
         X = X.astype(self.dtype)
         mode = 'test' if y is None else 'train'
         params = self.params
-        conv_param1 = self.conv_param
+        conv_param1 = self.conv_param1
         conv_param2 = self.conv_param2
         pool_param2 = self.pool_param2
         for key, bn_param in self.bn_params.iteritems():
             bn_param[mode] = mode
         scores = None
 
-        blocks = {}
-        blocks['h0'] = X
+        cache = {}
+        cache['h0'] = X
         # Forward into the conv blocks
-        for i in xrange(self.L):
+        for i in xrange(self.conv_layers):
             idx = i + 1
             w = params['W%d' % idx]
-            out_ch, in_ch = w.shape[:2]
             b = params['b%d' % idx]
-            h = blocks['h%d' % (idx - 1)]
-            if i > 0 and i % 2 == 1:
-                # store skip
-                skip, skip_cache = skip_forward(h, out_ch)
-                blocks['cache_skip%d' % idx] = skip_cache
+            h = cache['h%d' % (idx - 1)]
             beta = params['beta%d' % idx]
             gamma = params['gamma%d' % idx]
             bn_param = self.bn_params['bn_param%d' % idx]
+
+            out_ch, in_ch = w.shape[:2]
+            if i > 0 and i % 2 == 1:
+                # store skip
+                skip, skip_cache = skip_forward(h, out_ch)
+                cache['cache_skip%d' % idx] = skip_cache
             if i == 0 or in_ch == out_ch:
                 conv_param = conv_param1
             else:
@@ -332,20 +336,20 @@ class ResNet(object):
             if i > 0 and i % 2 == 0:
                 # add skip
                 h += skip
-            blocks['h%d' % idx] = h
-            blocks['cache_h%d' % idx] = cache_h
+            cache['h%d' % idx] = h
+            cache['cache_h%d' % idx] = cache_h
 
         # Pool
-        idx = self.L + 1
-        h = blocks['h%d' % (idx - 1)]
+        idx = self.pool_l
+        h = cache['h%d' % (idx - 1)]
         h, cache_h = avg_pool_forward(h, pool_param2)
-        blocks['h%d' % idx] = h
-        blocks['cache_h%d' % idx] = cache_h
+        cache['h%d' % idx] = h
+        cache['cache_h%d' % idx] = cache_h
 
         # Forward into the linear blocks
-        for i in xrange(self.M):
-            idx = self.L + i + 2
-            h = blocks['h%d' % (idx - 1)]
+        for i in xrange(self.affine_layers):
+            idx = self.affine_l + i
+            h = cache['h%d' % (idx - 1)]
 
             w = params['W%d' % idx]
             b = params['b%d' % idx]
@@ -354,19 +358,19 @@ class ResNet(object):
             bn_param = self.bn_params['bn_param%d' % idx]
             h, cache_h = affine_batchnorm_relu_forward(h, w, b, gamma,
                                                        beta, bn_param)
-            blocks['h%d' % idx] = h
-            blocks['cache_h%d' % idx] = cache_h
+            cache['h%d' % idx] = h
+            cache['cache_h%d' % idx] = cache_h
 
-        # Fnally Forward into the score
-        idx = self.L + self.M + 2
+        # Forward into the score layer
+        idx = self.softmax_l
         w = params['W%d' % idx]
         b = params['b%d' % idx]
-        h = blocks['h%d' % (idx - 1)]
+        h = cache['h%d' % (idx - 1)]
         h, cache_h = affine_forward(h, w, b)
-        blocks['h%d' % idx] = h
-        blocks['cache_h%d' % idx] = cache_h
+        cache['h%d' % idx] = h
+        cache['cache_h%d' % idx] = cache_h
 
-        scores = blocks['h%d' % idx]
+        scores = cache['h%d' % idx]
 
         if y is None:
             if return_probs:
@@ -378,58 +382,51 @@ class ResNet(object):
 
         loss, grads = 0, {}
 
-        # Computing of the loss
         data_loss, dscores = log_softmax_loss(scores, y)
-        reg_loss = 0
-        for w in [params[f] for f in params.keys() if f[0] == 'W']:
-            reg_loss += 0.5 * self.reg * np.sum(w * w)
-
-        loss = data_loss + reg_loss
 
         # Backward pass
-        # print 'Backward pass'
         # Backprop into the scoring layer
-        idx = self.L + self.M + 2
+        idx = self.softmax_l
         dh = dscores
-        h_cache = blocks['cache_h%d' % idx]
+        h_cache = cache['cache_h%d' % idx]
         dh, dw, db = affine_backward(dh, h_cache)
-        blocks['dh%d' % (idx - 1)] = dh
-        blocks['dW%d' % idx] = dw
-        blocks['db%d' % idx] = db
+        cache['dh%d' % (idx - 1)] = dh
+        cache['dW%d' % idx] = dw
+        cache['db%d' % idx] = db
 
         # Backprop into the linear blocks
-        for i in range(self.M)[::-1]:
-            idx = self.L + i + 2
-            dh = blocks['dh%d' % idx]
-            h_cache = blocks['cache_h%d' % idx]
+        for i in range(self.affine_layers)[::-1]:
+            idx = self.affine_l + i
+            dh = cache['dh%d' % idx]
+            h_cache = cache['cache_h%d' % idx]
             dh, dw, db, dgamma, dbeta = affine_batchnorm_relu_backward(
                 dh, h_cache)
-            blocks['dbeta%d' % idx] = dbeta
-            blocks['dgamma%d' % idx] = dgamma
-            blocks['dh%d' % (idx - 1)] = dh
-            blocks['dW%d' % idx] = dw
-            blocks['db%d' % idx] = db
+            cache['dbeta%d' % idx] = dbeta
+            cache['dgamma%d' % idx] = dgamma
+            cache['dh%d' % (idx - 1)] = dh
+            cache['dW%d' % idx] = dw
+            cache['db%d' % idx] = db
 
         # back pool
-        idx = self.L + 1
-        dh = blocks['dh%d' % idx]
-        h_cache = blocks['cache_h%d' % idx]
+        idx = self.pool_l
+        dh = cache['dh%d' % idx]
+        h_cache = cache['cache_h%d' % idx]
         dh = avg_pool_backward(dh, h_cache)
-        blocks['dh%d' % (idx - 1)] = dh
+        cache['dh%d' % (idx - 1)] = dh
 
         # Backprop into the conv blocks
-        for i in range(self.L)[::-1]:
+        for i in range(self.conv_layers)[::-1]:
             idx = i + 1
-            dh = blocks['dh%d' % idx]
-            h_cache = blocks['cache_h%d' % idx]
+            dh = cache['dh%d' % idx]
+            h_cache = cache['cache_h%d' % idx]
             w = params['W%d' % idx]
             out_ch, in_ch = w.shape[:2]
             if i > 0 and i % 2 == 0:
-                skip_cache = blocks['cache_skip' + str(idx-1)]
+                skip_cache = cache['cache_skip' + str(idx-1)]
                 dskip = skip_backward(dh, skip_cache)
 
-            if i == self.L-1:
-                dh = dh.reshape(*blocks['h%d' % idx].shape)
+            if i == self.conv_layers-1:
+                dh = dh.reshape(*cache['h%d' % idx].shape)
 
             dh, dw, db, dgamma, dbeta = conv_batchnorm_relu_backward(
                 dh, h_cache)
@@ -437,35 +434,31 @@ class ResNet(object):
                 # back pad trick
                 dh = dh[:, :, 1:, 1:]
 
-            blocks['dbeta%d' % idx] = dbeta
-            blocks['dgamma%d' % idx] = dgamma
+            cache['dbeta%d' % idx] = dbeta
+            cache['dgamma%d' % idx] = dgamma
 
             if i > 0 and i % 2 == 1:
                 dh += dskip
-            blocks['dh%d' % (idx - 1)] = dh
-            blocks['dW%d' % idx] = dw
-            blocks['db%d' % idx] = db
+            cache['dh%d' % (idx - 1)] = dh
+            cache['dW%d' % idx] = dw
+            cache['db%d' % idx] = db
 
         if compute_dX:
-            return blocks['dh0']
+            return cache['dh0']
 
-        # w gradients where we add the regulariation term
-        list_dw = {key[1:]: val + self.reg * params[key[1:]]
-                   for key, val in blocks.iteritems() if key[:2] == 'dW'}
-        # Paramerters b
-        list_db = {key[1:]: val for key, val in blocks.iteritems() if key[:2] ==
-                   'db'}
-        # Parameters gamma
-        list_dgamma = {key[1:]: val for key, val in blocks.iteritems() if key[
-            :6] == 'dgamma'}
-        # Paramters beta
-        list_dbeta = {key[1:]: val for key, val in blocks.iteritems() if key[
-            :5] == 'dbeta'}
-
+        # apply regularization to ALL parameters except softmax parameters
         grads = {}
-        grads.update(list_dw)
-        grads.update(list_db)
-        grads.update(list_dgamma)
-        grads.update(list_dbeta)
+        reg_loss = .0
+
+        for key, val in cache.iteritems():
+            if key[:1] == 'd' and 'h' not in key:
+                reg_term = 0
+                if key[2:] != str(self.softmax_l):
+                    reg_term = self.reg * params[key[1:]]
+                    w = params[key[1:]]
+                    reg_loss += 0.5 * self.reg * np.sum(w * w)
+                grads[key[1:]] = val + reg_term
+
+        loss = data_loss + reg_loss
 
         return loss, grads
