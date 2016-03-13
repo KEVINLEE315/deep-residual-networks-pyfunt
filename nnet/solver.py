@@ -10,6 +10,8 @@ import signal
 from copy_reg import pickle
 from types import MethodType
 import sys
+from tqdm import tqdm
+
 
 def _pickle_method(method):
     '''
@@ -175,12 +177,10 @@ class Solver(object):
         self.lr_decay = kwargs.pop('lr_decay', 1.0)
         self.batch_size = kwargs.pop('batch_size', 100)
         self.num_epochs = kwargs.pop('num_epochs', 10)
-        self.print_every = kwargs.pop('print_every', 10)
-        self.verbose = kwargs.pop('verbose', True)
 
         # Personal Edits
         self.path_checkpoints = kwargs.pop('path_checkpoints', 'checkpoints')
-        self.check_point_every = kwargs.pop('check_point_every', 0)
+        self.checkpoint_every = kwargs.pop('checkpoint_every', 0)
         self.custom_update_ld = kwargs.pop('custom_update_ld', False)
         self.batch_augment_func = kwargs.pop('batch_augment_func', False)
         self.num_processes = kwargs.pop('num_processes', 1)
@@ -227,8 +227,9 @@ class Solver(object):
         self.best_val_acc = 0
         self.best_params = {}
         self.loss_history = []
-        self.train_acc_history = []
         self.val_acc_history = []
+        self.train_acc_history = []
+        self.pbar = None
 
         # Make a deep copy of the optim_config for each parameter
         self.optim_configs = {}
@@ -239,6 +240,60 @@ class Solver(object):
         self.multiprocessing = bool(self.num_processes-1)
         if self.multiprocessing:
             self.pool = mp.Pool(self.num_processes, init_worker)
+
+    def load_current_checkpoint(self):
+        '''
+        Return the current checkpoint
+        '''
+        checkpoints = [f for f in os.listdir(
+            self.load_dir) if not f.startswith('.')]
+
+        try:
+            num = max([int(f.split('_')[1]) for f in checkpoints])
+            name = 'check_' + str(num)
+            cp = joblib.load(
+                os.path.join(self.path_checkpoints, name, name + '.pkl'))
+            # Set up some variables for book-keeping
+
+            self.epoch = cp['epoch']
+            self.best_val_acc = cp['best_val_acc']
+            self.best_params = cp['best_params']
+            self.loss_history = cp['loss_history']
+            self.val_acc_history = cp['val_acc_history']
+            self.train_acc_history = cp['train_acc_history']
+            self.model = cp['model']
+
+        except Exception, e:
+            raise e
+
+    def make_check_point(self):
+        '''
+        Save the solver's current status
+        '''
+        checkpoints = {
+            'model': self.model,
+            'epoch': self.epoch,
+            'best_params': self.best_params,
+            'best_val_acc': self.best_val_acc,
+            'loss_history': self.loss_history,
+            'val_acc_history': self.val_acc_history,
+            'train_acc_history': self.train_acc_history}
+
+        name = 'check_' + str(self.epoch)
+        directory = os.path.join(self.path_checkpoints, name)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        joblib.dump(checkpoints, os.path.join(
+            directory, name + '.pkl'))
+
+    def export_model(self, path):
+        np.save('%smodel' % path, self.model.params)
+
+    def export_loss(self, path):
+        i = np.arange(len(self.loss_history)) + 1
+        z = np.array(zip(i, i*self.batch_size, self.loss_history))
+        np.savetxt('%sloss_history.csv' % path, z, delimiter=',', fmt=[
+                   '%d', '%d', '%f'], header='iteration, n_images, loss')
 
     def _step(self):
         '''
@@ -263,26 +318,34 @@ class Solver(object):
             pool = self.pool
 
             X_batches = np.array_split(X_batch, n)
+            sub_weights = np.array([len(x)
+                                    for x in X_batches], dtype=np.float32)
+            sub_weights /= sub_weights.sum()
+
             y_batches = np.array_split(y_batch, n)
             try:
                 job_args = [(X_batches[i], y_batches[i]) for i in range(n)]
                 results = pool.map_async(
                     self.model.loss_helper, job_args).get()
-                losses, gradses = [], []
+                losses = np.zeros(len(results))
+                gradses = []
                 i = 0
-                for r in results:
+                for i, r in enumerate(results):
                     l, g = r
-                    losses.append(l)
+                    losses[i] = l
                     gradses.append(g)
                     i += 1
             except Exception, e:
                 pool.terminate()
                 pool.join()
                 raise e
-            loss = np.mean(losses)
+            loss = np.average(losses, weights=sub_weights)
             grads = {}
             for p, w in self.model.params.iteritems():
-                grads[p] = np.mean([grad[p] for grad in gradses], axis=0)
+                # , weights=sub_weights)
+                g = np.array([grad[p] for grad in gradses])
+                grads[p] = np.average(g, axis=0, weights=sub_weights)
+                # grads[p] = np.average(g, axis=0), weights=sub_weights)
 
         self.loss_history.append(loss)
 
@@ -293,60 +356,6 @@ class Solver(object):
             next_w, next_config = self.update_rule(w, dw, config)
             self.model.params[p] = next_w
             self.optim_configs[p] = next_config
-
-    def load_current_checkpoint(self):
-        '''
-        Return the current checkpoint
-        '''
-        checkpoints = [f for f in os.listdir(
-            self.load_dir) if not f.startswith('.')]
-
-        # try:
-        num = max([int(f.split('_')[1]) for f in checkpoints])
-        name = 'check_' + str(num)
-        cp = joblib.load(
-            os.path.join(self.path_checkpoints, name, name + '.pkl'))
-        # Set up some variables for book-keeping
-
-        self.epoch = cp['epoch']
-        self.best_val_acc = cp['best_val_acc']
-        self.best_params = cp['best_params']
-        self.loss_history = cp['loss_history']
-        self.train_acc_history = cp['train_acc_history']
-        self.val_acc_history = cp['val_acc_history']
-        self.model = cp['model']
-
-        # except Exception, e:
-        #     raise e
-
-    def make_check_point(self):
-        '''
-        Save the solver's current status
-        '''
-        checkpoints = {
-            'model': self.model,
-            'epoch': self.epoch,
-            'best_params': self.best_params,
-            'best_val_acc': self.best_val_acc,
-            'loss_history': self.loss_history,
-            'train_acc_history': self.train_acc_history,
-            'val_acc_history': self.val_acc_history}
-
-        name = 'check_' + str(self.epoch)
-        directory = os.path.join(self.path_checkpoints, name)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        joblib.dump(checkpoints, os.path.join(
-            directory, name + '.pkl'))
-
-    def export_model(self, path):
-        np.save('%smodel' % path, self.model.params)
-
-    def export_loss(self, path):
-        i = np.arange(len(self.loss_history)) + 1
-        z = np.array(zip(i, i*self.batch_size, self.loss_history))
-        np.savetxt('%sloss_history.csv' % path, z, delimiter=',', fmt=[
-                   '%d', '%d', '%f'], header='iteration, n_images, loss')
 
     def check_accuracy(self, X, y=None, num_samples=None, batch_size=100, return_preds=False):
         '''
@@ -379,7 +388,7 @@ class Solver(object):
         if N % batch_size != 0:
             num_batches += 1
         y_pred = []
-
+        self.pbar = tqdm(total=N, desc='Accuracy Check', unit=' im')
         # Compute loss and gradient
         for i in xrange(num_batches):
             start = i * batch_size
@@ -399,7 +408,8 @@ class Solver(object):
                     self.pool.terminate()
                     self.pool.join()
                     raise e
-
+            self.pbar.update(end - start)
+        print
         y_pred = np.hstack(y_pred)
         if return_preds:
             return y_pred
@@ -413,37 +423,18 @@ class Solver(object):
         '''
         num_train = self.X_train.shape[0]
         iterations_per_epoch = num_train / self.batch_size + 1
+        real_num_train = iterations_per_epoch * self.batch_size
         num_iterations = int(self.num_epochs * iterations_per_epoch)
-        print 'Training for %d epochs, or %d iterations.' % (self.num_epochs, num_iterations)
-        secs_per_batch = []
+
+        print 'Training for %d epochs (%d iterations).\n' % (self.num_epochs, num_iterations)
+        epoch_end = True
         for it in xrange(num_iterations):
-            t0 = time.time()
-            self._step()
-            secs_per_batch.append(time.time() - t0)
 
-            # At the end of every epoch, increment the epoch counter and decay the
-            # learning rate.
-            epoch_end = (it + 1) % iterations_per_epoch == 0
-
-            # Check train and val accuracy on the first iteration, the last
-            # iteration, and at the end of each epoch.
-            first_it = (it == 0)
-            last_it = (it == num_iterations + 1)
-
-            verbose = self.print_every and (it + 1) % self.print_every == 0
-            if first_it or last_it or epoch_end or verbose:
-                train_acc = self.check_accuracy(self.X_train, self.y_train,
-                                                num_samples=1000)
+            if epoch_end:
+                train_acc = self.check_accuracy(self.X_train[:1000], self.y_train[:1000])
                 val_acc = self.check_accuracy(self.X_val, self.y_val)
 
-                # Maybe print training loss
-                if self.verbose:
-                    mean_secs_per_batch = sum(
-                        secs_per_batch[-self.print_every:])/len(secs_per_batch[-self.print_every:])  # last check mean
-                    print '%s: Step %d, loss: %.3f train acc: %.3f; val_acc: %.3f (%.2f sec/It.)' % (
-                        str(datetime.now()), it + 1, self.loss_history[-1], train_acc, val_acc, mean_secs_per_batch)
-
-                self.train_acc_history.append(train_acc)
+                self.train_acc_history.append(val_acc)
                 self.val_acc_history.append(val_acc)
 
                 # Keep track of the best model
@@ -453,12 +444,23 @@ class Solver(object):
                     for k, v in self.model.params.iteritems():
                         self.best_params[k] = v.copy()
 
-                if self.verbose and epoch_end:
-                    print '*Epoch %d / %d Ended: best_val_acc: %f' % (
-                        self.epoch, self.num_epochs, self.best_val_acc)
+                print '%s: iteration %d, train_acc: %.4f, val_acc: %.4f, best_val_acc: %.4f;\n' % (
+                    str(datetime.now()), it, train_acc, val_acc, self.best_val_acc)
+
+                finish = it == num_iterations - 1
+                if not finish:
+                    d = 'Epoch: %d / %d' % (
+                        self.epoch + 1, self.num_epochs)
+                    self.pbar = tqdm(total=real_num_train, desc=d, unit=' im')
+
+            self._step()
+            self.pbar.update(self.batch_size)
+
+            epoch_end = (it + 1) % iterations_per_epoch == 0
 
             if epoch_end:
-                sys.stdout.write('\a')  # emit sound
+                print
+                self.emit_sound()
                 self.epoch += 1
                 lr_decay_updated = False
                 if self.custom_update_ld:
@@ -469,13 +471,16 @@ class Solver(object):
                     if lr_decay_updated:
                         print 'learning_rate updated: ', self.optim_configs[k]['learning_rate']
                         lr_decay_updated = False
-                if self.check_point_every and (self.epoch % self.check_point_every == 0):
+                if self.checkpoint_every and (self.epoch % self.checkpoint_every == 0):
                     self.make_check_point()
 
         # At the end of training swap the best params into the model
         self.model.params = self.best_params
         self.pool.terminate()
         self.pool.join()
+
+    def emit_sound(self):
+        sys.stdout.write('\a')
 
 
 # again, check http://stackoverflow.com/a/1816969/1142814 and comments
