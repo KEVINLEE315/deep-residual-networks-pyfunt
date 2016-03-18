@@ -30,10 +30,9 @@ def skip_forward(x, n_out_channels):
     '''
     N, n_in_channels, H, W = x.shape
     assert (n_in_channels == n_out_channels) or (
-            n_out_channels == n_in_channels*2), 'Invalid n_out_channels'
+        n_out_channels == n_in_channels*2), 'Invalid n_out_channels'
     skip = np.array(x, copy=True)
     pool_cache, downsampled, skip_p = None, False, 0
-
 
     if n_out_channels > n_in_channels:
         # downsampling
@@ -62,69 +61,10 @@ def skip_backward(dout, cache):
     dskip = np.array(dout, copy=True)
     if downsampled:
         # back pad
-        p = dout.shape[1]/2
         dskip = dskip[:, skip_p:-skip_p, :, :]
         # back downsampling
         dskip = avg_pool_backward(dskip, pool_cache)
     return dskip
-
-
-# def skip_forward(x, n_out_channels):
-#     '''
-#     Computes the forward pass for a skip connection.
-
-#     The input x has shape (N, d_1, d_2, d_3) where x[i] is the ith input.
-#     If n_out_channels is equal to 2* d_1, downsampling and padding are applied
-#     else, the input is replicated in output
-
-#     Inputs:
-#     x - Input data, of shape (N, d_1, d_2, d_3)
-#     n_out_channels - Number of channels in output
-
-#     Returns a tuple of:
-#     - skip: output, of shape (N, n_out_channels,  d_2/2, d_3/2)
-#     - cache: (pool_cache, downsampled, skip_p)
-#     '''
-#     N, n_in_channels, H, W = x.shape
-#     assert (n_in_channels == n_out_channels) or (
-#             n_out_channels == n_in_channels*2), 'Invalid n_out_channels'
-#     skip = np.array(x, copy=True)
-#     pool_cache, downsampled = None, False
-
-#     if n_out_channels > n_in_channels:
-#         # downsampling
-#         pool_param = {'pool_width': 2, 'pool_height': 2, 'stride': 2}
-#         skip, pool_cache = avg_pool_forward(skip, pool_param)
-#         # padding
-#         p = (n_in_channels)/2
-#         skip = np.pad(skip, ((0, 0), (p, p), (0, 0), (0, 0)),
-#                       mode='constant')
-
-#         downsampled = True
-
-#     return skip, (pool_cache, downsampled)
-
-
-# def skip_backward(dout, cache):
-#     '''
-#     Computes the backward pass for a skip connection.
-
-#     The input x has shape (N, d_1, d_2, d_3) where x[i] is the ith input.
-#     If n_out_channels was equal to 2* d_1, we back-apply downsampling and padding,
-#     else, the input is replicated in output
-
-#     Returns:
-#     - dskip: Gradient with respect to x, of shape (N, d1, ..., d_k)
-#     '''
-#     pool_cache, downsampled = cache
-#     dskip = np.array(dout, copy=True)
-#     if downsampled:
-#         # back pad
-#         p = dout.shape[1]/2
-#         dskip = dskip[:, p:-p, :, :]
-#         # back downsampling
-#         dskip = avg_pool_backward(dskip, pool_cache)
-#     return dskip
 
 
 def affine_relu_forward(x, w, b):
@@ -155,7 +95,7 @@ def affine_relu_backward(dout, cache):
     return dx, dw, db
 
 
-def affine_batchnorm_relu_forward(x, w, b, gamma, beta, bn_param):
+def affine_bn_relu_forward(x, w, b, gamma, beta, bn_param):
     '''
     Convenience layer that performs an affine transform followed by batch
     normalization, followed by a ReLU.
@@ -178,7 +118,7 @@ def affine_batchnorm_relu_forward(x, w, b, gamma, beta, bn_param):
     return hnormrelu, cache
 
 
-def affine_batchnorm_relu_backward(dout, cache):
+def affine_bn_relu_backward(dout, cache):
     '''
     Backward pass for the affine-relu convenience layer
     '''
@@ -249,7 +189,8 @@ def conv_relu_pool_backward(dout, cache):
     dx, dw, db = conv_backward_fast(da, conv_cache)
     return dx, dw, db
 
-def conv_batchnorm_relu_forward(x, w, b, conv_param, gamma, beta, bn_param):
+
+def conv_bn_relu_forward(x, w, b, conv_param, gamma, beta, bn_param):
     '''
     A convenience layer that performs a convolution followed by a batch
     normalization, followed by a ReLU.
@@ -259,6 +200,7 @@ def conv_batchnorm_relu_forward(x, w, b, conv_param, gamma, beta, bn_param):
     - w, b, conv_param: Weights and parameters for the convolutional layer
     - gamma, beta, bn_param: Weights and parameters for the batch normalization
     layer
+    - res: residual path to add before relu
 
     Returns a tuple of:
     - out: Output from the ReLU
@@ -268,12 +210,11 @@ def conv_batchnorm_relu_forward(x, w, b, conv_param, gamma, beta, bn_param):
     out, batchnorm_cache = spatial_batchnorm_forward(
         out, gamma, beta, bn_param)
     out, relu_cache = relu_forward(out)
-
     cache = (conv_cache, batchnorm_cache, relu_cache)
     return out, cache
 
 
-def conv_batchnorm_relu_backward(dout, cache):
+def conv_bn_relu_backward(dout, cache):
     '''
     Backward pass for the conv-batchnorm-relu convenience layer.
     '''
@@ -284,7 +225,52 @@ def conv_batchnorm_relu_backward(dout, cache):
 
     return dx, dw, db, dgamma, dbeta
 
-def conv_batchnorm_relu_pool_forward(x, w, b, conv_param, gamma, beta, bn_param, pool_param):
+
+def bn_relu_conv_forward(x, w, b, conv_param, gamma, beta, bn_param, res=None):
+    '''
+    A convenience layer that performs a convolution followed by a batch
+    normalization, followed by a ReLU.
+
+    Inputs:
+    - x: Input to the convolutional layer
+    - w, b, conv_param: Weights and parameters for the convolutional layer
+    - gamma, beta, bn_param: Weights and parameters for the batch normalization
+    layer
+    - res: residual path to add before relu
+
+    Returns a tuple of:
+    - out: Output from the ReLU
+    - cache: Object to give to the backward pass
+    '''
+    out, batchnorm_cache = spatial_batchnorm_forward(
+        out, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(out)
+    out, conv_cache = conv_forward_fast(x, w, b, conv_param)
+
+    if res is not None:
+        out += res
+
+    cache = (conv_cache, batchnorm_cache, relu_cache)
+    return out, cache
+
+
+def bn_relu_conv_backward(dout, cache, dres_ref=None):
+    '''
+    Backward pass for the conv-batchnorm-relu convenience layer.
+    '''
+    assert dres_ref is None or len(dres_ref) == 0
+    conv_cache, batchnorm_cache, relu_cache = cache
+    if dres_ref is not None:
+        dres_ref.append(dout)
+
+    dx, dw, db = conv_backward_fast(dout, conv_cache)
+    dout = relu_backward(dout, relu_cache)
+    dout, dgamma, dbeta = spatial_batchnorm_backward(dout, batchnorm_cache)
+
+    return dx, dw, db, dgamma, dbeta
+
+
+def conv_bn_relu_pool_forward(x, w, b, conv_param, gamma, beta, bn_param, pool_param):
     '''
     A convenience layer that performs a convolution followed by a batch
     normalization, followed by a ReLU, followed by a pooling layer.
@@ -310,7 +296,7 @@ def conv_batchnorm_relu_pool_forward(x, w, b, conv_param, gamma, beta, bn_param,
     return out, cache
 
 
-def conv_batchnorm_relu_pool_backward(dout, cache):
+def conv_bn_relu_pool_backward(dout, cache):
     '''
     Backward pass for the conv-batchnorm-relu-pool convenience layer.
     '''
@@ -322,4 +308,3 @@ def conv_batchnorm_relu_pool_backward(dout, cache):
     dx, dw, db = conv_backward_fast(dout, conv_cache)
 
     return dx, dw, db, dgamma, dbeta
-
