@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def init_conv_w(shape):
     '''
     Initialize convolution layer's weights like torch's linear default
@@ -12,6 +13,7 @@ def init_conv_w(shape):
     input_n = np.prod(shape[1:])
     std = 1./np.sqrt(input_n)
     return np.random.normal(0, std, shape)
+
 
 def init_conv_w_kaiming(shape, gain=2.):
     '''
@@ -28,6 +30,7 @@ def init_conv_w_kaiming(shape, gain=2.):
     std = np.sqrt(gain/input_n)
     return np.random.normal(0., std, shape)
 
+
 def init_affine_wb(shape):
     '''
     Initialize affine layer's weights and biases like torch's linear \
@@ -39,6 +42,7 @@ def init_affine_wb(shape):
     b = np.random.normal(0, std, shape[1])
     return w, b
 
+
 def init_bn_w(n_ch):
     '''
     Initialize batch normalization layer's weights like torch's default
@@ -47,10 +51,11 @@ def init_bn_w(n_ch):
     '''
     return np.random.uniform(size=n_ch)
 
+
 def init_bn_w_gcr(n_ch):
     '''
     Initialize batch normalization layer's weights like torch's default
     mode, for more infos:
     https://github.com/torch/nn/blob/master/BatchNormalization.lua
     '''
-    return np.random.normal(1, 2e-3, n_ch)
+    return np.random.normal(1., 2e-3, n_ch)
