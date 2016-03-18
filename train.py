@@ -5,19 +5,16 @@ import numpy as np
 # import matplotlib.pyplot as plt
 from nnet.data.data_utils import get_CIFAR10_data
 from nnet.data.data_augmentation import random_contrast, random_flips
-from nnet.data.data_augmentation import add_pad, random_crops
+from nnet.data.data_augmentation import random_crops
 from nnet.data.data_augmentation import random_rotate, random_tint
 from res_net import ResNet
 from nnet.solver import Solver as Solver
 
-# from nnet.gradient_check import eval_numerical_gradient, eval_numerical_gradient_array
-# import matplotlib.pyplot as plt
-# from nnet.utils.vis_utils import visualize_grid
 import inspect
 import argparse
 
 DATASET_PATH = 'nnet/data/cifar-10-batches-py'
-EXPERIMENT_PATH = '../Experiments/%d/' % 6
+EXPERIMENT_PATH = '../Experiments/%d/' % 7
 
 # residual network constants
 NSIZE = 3
@@ -27,9 +24,10 @@ N_STARTING_FILTERS = 16
 NUM_PROCESSES = 4
 
 NUM_TRAIN = 50000
-NUM_TEST = 1000
+NUM_TEST = 10000
 
-WEIGHT_DEACY = 0  # 1e-4
+WEIGHT_DEACY = 0
+REGULARIZATION = 1e-4
 LEARNING_RATE = .1
 MOMENTUM = .9
 NUM_EPOCHS = 200
@@ -73,7 +71,7 @@ def parse_args():
         default=N_STARTING_FILTERS,
         type=int,
         help='Network will starts with those number of filters')
-    add('-np', '--n_processes',
+    add('--n_processes', '-np',
         metavar='INT',
         default=NUM_PROCESSES,
         type=int,
@@ -93,6 +91,11 @@ def parse_args():
         default=WEIGHT_DEACY,
         type=float,
         help='Weight decay for sgd_th')
+    add('-reg', '--network_regularization',
+        metavar='FLOAT',
+        default=REGULARIZATION,
+        type=float,
+        help='L2 regularization term for the network')
     add('-lr', '--learning_rate',
         metavar='FLOAT',
         default=LEARNING_RATE,
@@ -103,31 +106,32 @@ def parse_args():
         default=MOMENTUM,
         type=float,
         help='Nesterov momentum use with sgd_th')
-    add('-nep', '--n_epochs',
+    add('--n_epochs', '-nep',
         metavar='INT',
         default=NUM_EPOCHS,
         type=int,
         help='Number of epochs for training')
-    add('--batch_size',
+    add('--batch_size', '-bs',
         metavar='INT',
         default=BATCH_SIZE,
         type=int,
         help='Number of images for each iteration')
-    add('-cp', '--checkpoint_every',
+    add('--checkpoint_every', '-cp',
         metavar='INT',
         default=CHECKPOINT_EVERY,
         type=int,
         help='Number of epochs between each checkpoint')
     parser.parse_args(namespace=args)
+    assert not (args.network_regularization and args.weight_decay)
 
 
 def data_augm(batch):
-    p = 2
+    p = 4
     h, w = XH, XW
-    batch = random_tint(batch)
-    batch = random_contrast(batch)
+    #batch = random_tint(batch)
+    #batch = random_contrast(batch)
     batch = random_flips(batch)
-    batch = random_rotate(batch, 10)
+    #batch = random_rotate(batch, 10)
     batch = random_crops(batch, (h, w), pad=p)
     return batch
 
@@ -138,7 +142,7 @@ def custom_update_decay(epoch):
     return 1
 
 
-def pretty_print(solver):
+def print_infos(solver):
     print 'Model: \n%s' % solver.model
 
     print 'Solver: \n%s' % solver
@@ -163,11 +167,13 @@ def main():
     }
 
     exp_path = args.experiment_path
+    nf = args.n_starting_filters
+    reg = args.network_regularization
 
-    model = ResNet( n_size=args.n_size,
-                   num_starting_filters=args.n_starting_filters,
+    model = ResNet(n_size=args.n_size,
+                   num_starting_filters=nf,
                    hidden_dims=[],
-                   reg=1e-4,
+                   reg=reg,
                    dtype=np.float32)
 
     wd = args.weight_decay
@@ -191,21 +197,13 @@ def main():
                     checkpoint_every=cp,
                     num_processes=num_p)
 
-    pretty_print(solver)
+    print_infos(solver)
     solver.train()
 
-    solver.export_loss(exp_path)
     solver.export_model(exp_path)
-    solver.export_hostories(exp_path)
-    #np.save('../Experiments/%d/model.npy' %exp, solver.model.params)
-    np.save(exp_path + 'loss', solver.loss_history)
-    np.save(exp_path + 'val_acc_history', solver.val_acc_history)
-    np.save(exp_path + 'train_acc_history', solver.val_acc_history)
+    solver.export_hstories(exp_path)
 
     print 'finish'
-
-    import pdb
-    pdb.set_trace()
 
 
 if __name__ == '__main__':
