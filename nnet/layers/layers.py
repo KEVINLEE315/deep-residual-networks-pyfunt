@@ -17,7 +17,7 @@ def relu_forward(x, in_place=True):
     th = 1e-6
     out = x
     indices = np.where(x > th)
-    cache = indices, th, in_place
+    cache = indices, in_place
     if in_place:
         x[indices] = 0.
         return x, cache
@@ -37,7 +37,7 @@ def relu_backward(dout, cache):
     Returns:
     - dx: Gradient with respect to x
     '''
-    indices, th, in_place = cache
+    indices, in_place = cache
     if in_place:
         dout[indices] = 0.
         return dout
@@ -64,7 +64,7 @@ def affine_forward(x, w, b):
     - cache: (x, w, b)
     '''
     out = x.reshape(x.shape[0], -1).dot(w) + b
-    cache = (x, w, b)
+    cache = (x, w)
     return out, cache
 
 
@@ -83,7 +83,7 @@ def affine_backward(dout, cache):
     - dw: Gradient with respect to w, of shape (D, M)
     - db: Gradient with respect to b, of shape (M,)
     '''
-    x, w, b = cache
+    x, w = cache
     dx = dout.dot(w.T).reshape(x.shape)
     dw = x.reshape(x.shape[0], -1).T.dot(dout)
     db = np.sum(dout, axis=0)
@@ -134,7 +134,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
 
     out, cache = None, None
     if mode == 'train':
-        mean = 1. / N * np.sum(x, axis=0)
+        mean = x.mean(axis=0)
 
         xmu = x - mean
 
@@ -152,7 +152,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
 
         running_var = momentum * unbiased_var + (1. - momentum) * running_var
 
-        cache = (mean, invstd, gamma, x)
+        cache = (xmu, invstd, gamma)
 
     elif mode == 'test':
         mean = running_mean
@@ -183,15 +183,15 @@ def batchnorm_backward(dout, cache):
     - dgamma: Gradient with respect to scale parameter gamma, of shape (D,)
     - dbeta: Gradient with respect to shift parameter beta, of shape (D,)
     '''
-    mean, invstd, gamma, x = cache
+    xmu, invstd, gamma = cache
 
     N, D = dout.shape
 
     _sum = np.sum(dout, axis=0)
-    dotp = np.sum(((x - mean) * dout), axis=0)
+    dotp = np.sum((xmu * dout), axis=0)
 
     k = 1. / N * dotp * invstd * invstd
-    dx = (x - mean) * k
+    dx = xmu * k
 
     dmean = 1. / N * _sum
     dx = (dout - dmean - dx) * invstd * gamma
