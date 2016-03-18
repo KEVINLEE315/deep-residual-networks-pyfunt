@@ -129,10 +129,10 @@ class Solver(object):
           'y_train': Array of shape (N_train,) giving labels for training images
           'y_val': Array of shape (N_val,) giving labels for validation images
 
-        Optional arguments: Arguments you find in the Stanford's
+        Optional arguments: Arguments you also find in the Stanford's
         cs231n assignments' Solver
         - update_rule: A string giving the name of an update rule in optim.py.
-          Default is 'sgd'.
+          Default is 'sgd_th'.
         - optim_config: A dictionary containing hyperparameters that will be
           passed to the chosen update rule. Each update rule requires different
           hyperparameters (see optim.py) but all update rules require a
@@ -142,10 +142,6 @@ class Solver(object):
         - batch_size: Size of minibatches used to compute loss and gradient during
           training.
         - num_epochs: The number of epochs to run for during training.
-        - print_every: Integer; training losses will be printed every print_every
-          iterations.
-        - verbose: Boolean; if set to false then no output will be printed during
-          training.
         Custom arguments:
         - load_dir: root directory for the checkpoints folder, if is not False,
           the instance tries to load the most recent checkpoint found in load_dir.
@@ -287,13 +283,30 @@ class Solver(object):
             directory, name + '.pkl'))
 
     def export_model(self, path):
+        if not os.path.exists(path):
+            os.makedirs(path)
         np.save('%smodel' % path, self.model.params)
 
-    def export_loss(self, path):
+    def export_hstories(self, path):
+        if not os.path.exists(path):
+            os.makedirs(path)
         i = np.arange(len(self.loss_history)) + 1
         z = np.array(zip(i, i*self.batch_size, self.loss_history))
-        np.savetxt('%sloss_history.csv' % path, z, delimiter=',', fmt=[
+        np.savetxt(path + 'loss_history.csv', z, delimiter=',', fmt=[
                    '%d', '%d', '%f'], header='iteration, n_images, loss')
+
+        i = np.arange(len(self.train_acc_history), dtype=np.int)
+
+        z = np.array(zip(i, self.train_acc_history))
+        np.savetxt(path + 'train_acc_history.csv', z, delimiter=',', fmt=[
+            '%d', '%f'], header='epoch, train_acc')
+
+        z = np.array(zip(i, self.val_acc_history))
+        np.savetxt(path + 'val_acc_history.csv', z, delimiter=',', fmt=[
+            '%d', '%f'], header='epoch, val_acc')
+        np.save(path + 'loss', self.loss_history)
+        np.save(path + 'train_acc_history', self.train_acc_history)
+        np.save(path + 'val_acc_history', self.val_acc_history)
 
     def _step(self):
         '''
@@ -388,7 +401,7 @@ class Solver(object):
         if N % batch_size != 0:
             num_batches += 1
         y_pred = []
-        self.pbar = tqdm(total=N, desc='Accuracy Check', unit=' im')
+        self.pbar = tqdm(total=N, desc='Accuracy Check', unit='im')
         # Compute loss and gradient
         for i in xrange(num_batches):
             start = i * batch_size
@@ -409,6 +422,7 @@ class Solver(object):
                     self.pool.join()
                     raise e
             self.pbar.update(end - start)
+
         print
         y_pred = np.hstack(y_pred)
         if return_preds:
@@ -417,41 +431,50 @@ class Solver(object):
 
         return acc
 
+    def _check_and_swap(self, it=0):
+        '''
+        Check accuracy for both X_train[:1000] and X_val.
+        '''
+        train_acc = self.check_accuracy(
+            self.X_train[:1000], self.y_train[:1000])
+        val_acc = self.check_accuracy(self.X_val, self.y_val)
+        self.train_acc_history.append(train_acc)
+        self.val_acc_history.append(val_acc)
+
+        self.emit_sound()
+        # Keep track of the best model
+        if val_acc > self.best_val_acc:
+            self.best_val_acc = val_acc
+            self.best_params = {}
+            for k, v in self.model.params.iteritems():
+                self.best_params[k] = v.copy()
+        loss = '%.4f' % self.loss_history[it-1] if it > 0 else '-'
+        print '%s - iteration %d: loss:%s, train_acc: %.4f, val_acc: %.4f, best_val_acc: %.4f;\n' % (
+            str(datetime.now()), it, loss, train_acc, val_acc, self.best_val_acc)
+
+    def _new_training_bar(self, total):
+        '''
+        Create a new loading bar.
+        '''
+        d = 'Epoch %d / %d' % (
+            self.epoch + 1, self.num_epochs)
+        self.pbar = tqdm(total=total, desc=d, unit='im')
+
     def train(self):
         '''
         Run optimization to train the model.
         '''
         num_train = self.X_train.shape[0]
-        iterations_per_epoch = num_train / self.batch_size + 1
-        real_num_train = iterations_per_epoch * self.batch_size
-        num_iterations = int(self.num_epochs * iterations_per_epoch)
+        iterations_per_epoch = int(np.ceil(num_train / float(self.batch_size)))
+        images_per_epochs = iterations_per_epoch * self.batch_size
+        num_iterations = self.num_epochs * iterations_per_epoch
 
         print 'Training for %d epochs (%d iterations).\n' % (self.num_epochs, num_iterations)
         epoch_end = True
+        lr_decay_updated = False
+        #self._check_and_swap()
+        self._new_training_bar(images_per_epochs)
         for it in xrange(num_iterations):
-
-            if epoch_end:
-                train_acc = self.check_accuracy(self.X_train[:1000], self.y_train[:1000])
-                val_acc = self.check_accuracy(self.X_val, self.y_val)
-
-                self.train_acc_history.append(val_acc)
-                self.val_acc_history.append(val_acc)
-
-                # Keep track of the best model
-                if val_acc > self.best_val_acc:
-                    self.best_val_acc = val_acc
-                    self.best_params = {}
-                    for k, v in self.model.params.iteritems():
-                        self.best_params[k] = v.copy()
-
-                print '%s: iteration %d, train_acc: %.4f, val_acc: %.4f, best_val_acc: %.4f;\n' % (
-                    str(datetime.now()), it, train_acc, val_acc, self.best_val_acc)
-
-                finish = it == num_iterations - 1
-                if not finish:
-                    d = 'Epoch: %d / %d' % (
-                        self.epoch + 1, self.num_epochs)
-                    self.pbar = tqdm(total=real_num_train, desc=d, unit=' im')
 
             self._step()
             self.pbar.update(self.batch_size)
@@ -460,26 +483,40 @@ class Solver(object):
 
             if epoch_end:
                 print
-                self.emit_sound()
                 self.epoch += 1
-                lr_decay_updated = False
+
                 if self.custom_update_ld:
                     self.lr_decay = self.custom_update_ld(self.epoch)
                     lr_decay_updated = self.lr_decay != 1
+
                 for k in self.optim_configs:
                     self.optim_configs[k]['learning_rate'] *= self.lr_decay
-                    if lr_decay_updated:
-                        print 'learning_rate updated: ', self.optim_configs[k]['learning_rate']
-                        lr_decay_updated = False
+
                 if self.checkpoint_every and (self.epoch % self.checkpoint_every == 0):
                     self.make_check_point()
 
+                self._check_and_swap(it)
+                finish = it == num_iterations - 1
+                if not finish:
+                    if lr_decay_updated:
+                        print 'learning_rate updated: ', next(self.optim_configs.itervalues())['learning_rate']
+                        lr_decay_updated = False
+                    print
+                    self._new_training_bar(images_per_epochs)
+
         # At the end of training swap the best params into the model
         self.model.params = self.best_params
-        self.pool.terminate()
-        self.pool.join()
+        if self.multiprocessing:
+            try:
+                self.pool.terminate()
+                self.pool.join()
+            except:
+                pass
 
     def emit_sound(self):
+        '''
+        Emit sound when epoch end.
+        '''
         sys.stdout.write('\a')
 
 
