@@ -35,7 +35,7 @@ def conv_forward_im2col(x, w, b, conv_param):
     out = res.reshape(w.shape[0], out.shape[2], out.shape[3], x.shape[0])
     out = out.transpose(3, 0, 1, 2)
 
-    cache = (x, w, b, conv_param, x_cols)
+    cache = (x, w, conv_param, x_cols)
     return out, cache
 
 
@@ -73,15 +73,15 @@ def conv_forward_strides(x, w, b, conv_param):
 
     out = np.ascontiguousarray(out)
 
-    cache = (x, w, b, conv_param, x_cols)
+    cache = (x.shape, w, conv_param, x_cols)
     return out, cache
 
 
 def conv_backward_strides(dout, cache):
-    x, w, b, conv_param, x_cols = cache
+    x_shape, w, conv_param, x_cols = cache
     stride, pad = conv_param['stride'], conv_param['pad']
 
-    N, C, H, W = x.shape
+    N, C, H, W = x_shape
     F, _, HH, WW = w.shape
     _, _, out_h, out_w = dout.shape
 
@@ -102,7 +102,7 @@ def conv_backward_im2col(dout, cache):
     A fast implementation of the backward pass for a convolutional layer
     based on im2col and col2im.
     '''
-    x, w, b, conv_param, x_cols = cache
+    x, w, conv_param, x_cols = cache
     stride, pad = conv_param['stride'], conv_param['pad']
 
     db = np.sum(dout, axis=(0, 2, 3))
@@ -185,7 +185,7 @@ def max_pool_forward_reshape(x, pool_param):
                            W / pool_width, pool_width)
     out = x_reshaped.max(axis=3).max(axis=4)
 
-    cache = (x, x_reshaped, out)
+    cache = (x.shape, x_reshaped, out)
     return out, cache
 
 
@@ -206,7 +206,7 @@ def max_pool_backward_reshape(dout, cache):
     however this results in a significant performance penalty (about 40% slower)
     and is unlikely to matter in practice so we don't do it.
     '''
-    x, x_reshaped, out = cache
+    x_shape, x_reshaped, out = cache
 
     dx_reshaped = np.zeros_like(x_reshaped)
     out_newaxis = out[:, :, :, np.newaxis, :, np.newaxis]
@@ -215,7 +215,7 @@ def max_pool_backward_reshape(dout, cache):
     dout_broadcast, _ = np.broadcast_arrays(dout_newaxis, dx_reshaped)
     dx_reshaped[mask] = dout_broadcast[mask]
     dx_reshaped /= np.sum(mask, axis=(3, 5), keepdims=True)
-    dx = dx_reshaped.reshape(x.shape)
+    dx = dx_reshaped.reshape(x_shape)
 
     return dx
 
@@ -245,7 +245,7 @@ def max_pool_forward_im2col(x, pool_param):
     x_cols_max = x_cols[x_cols_argmax, np.arange(x_cols.shape[1])]
     out = x_cols_max.reshape(out_height, out_width, N, C).transpose(2, 3, 0, 1)
 
-    cache = (x, x_cols, x_cols_argmax, pool_param)
+    cache = (x.shape, x_cols.shape, x_cols_argmax, pool_param)
     return out, cache
 
 
@@ -256,18 +256,18 @@ def max_pool_backward_im2col(dout, cache):
     This isn't much faster than the naive version, so it should be avoided if
     possible.
     '''
-    x, x_cols, x_cols_argmax, pool_param = cache
-    N, C, H, W = x.shape
+    x_shape, x_cols_shape, x_cols_argmax, pool_param = cache
+    N, C, H, W = x_shape
     pool_height, pool_width = pool_param[
         'pool_height'], pool_param['pool_width']
     stride = pool_param['stride']
 
     dout_reshaped = dout.transpose(2, 3, 0, 1).flatten()
-    dx_cols = np.zeros_like(x_cols)
+    dx_cols = np.zeros(x_shape, dtype=dout.dtype)
     dx_cols[x_cols_argmax, np.arange(dx_cols.shape[1])] = dout_reshaped
     dx = col2im_cython(dx_cols, N * C, 1, H, W, pool_height, pool_width,
                        padding=0, stride=stride)
-    dx = dx.reshape(x.shape)
+    dx = dx.reshape(x_shape)
 
     return dx
 
@@ -334,7 +334,7 @@ def avg_pool_forward_reshape(x, pool_param):
                            W / pool_width, pool_width)
     out = x_reshaped.mean(axis=3).mean(axis=4)
     n = pool_width * pool_height
-    cache = (x, x_reshaped, out, n)
+    cache = (x.shape, x_reshaped.shape, n)
     return out, cache
 
 
@@ -347,12 +347,11 @@ def avg_pool_backward_reshape(dout, cache):
     max_pool_forward_reshape.
     '''
 
-    x, x_reshaped, out, n = cache
-    dx_reshaped = np.zeros_like(x_reshaped)
-    dout_newaxis = dout[:, :, :, np.newaxis, :, np.newaxis]
+    x_shape, x_reshaped_shape, n = cache
+    dx_reshaped = np.zeros(x_reshaped_shape, dtype=dout.dtype)
+    dout_newaxis = (dout / float(n))[:, :, :, np.newaxis, :, np.newaxis]
     dout_broadcast, _ = np.broadcast_arrays(dout_newaxis, dx_reshaped)
-    dx = dout_broadcast.reshape(x.shape)
-    dx /= float(n)
+    dx = dout_broadcast.reshape(x_shape)
 
     return dx
 
@@ -384,7 +383,7 @@ def avg_pool_forward_im2col(x, pool_param):
     x_cols_avg = np.mean(x_cols, axis=0)
     out = x_cols_avg.reshape(out_height, out_width, N, C).transpose(2, 3, 0, 1)
 
-    cache = (x, x_cols, pool_param)
+    cache = (x.shape, x_cols.shape, pool_param)
     return out, cache
 
 
@@ -397,19 +396,19 @@ def avg_pool_backward_im2col(dout, cache):
 
     Possibly bogus if used w/o square pooling regions that tile the input
     '''
-    x, x_cols, pool_param = cache
-    N, C, H, W = x.shape
+    x_shape, x_cols_shape, pool_param = cache
+    N, C, H, W = x_shape
     pool_height, pool_width = pool_param[
         'pool_height'], pool_param['pool_width']
     stride = pool_param['stride']
     pool_dim = pool_height * pool_width
 
     dout_reshaped = dout.transpose(2, 3, 0, 1).flatten()
-    dx_cols = np.zeros_like(x_cols)
-    dx_cols[:, :] = 1. / pool_dim * dout_reshaped
+    dx_cols = np.zeros(x_cols_shape, dtype=dout.dtype)
+    dx_cols[:, np.arange(dx_cols_shape[1])] = 1. / pool_dim * dout_reshaped
     dx = col2im_cython(dx_cols, N * C, 1, H, W, pool_height, pool_width,
                        padding=0, stride=stride)
 
-    dx = dx.reshape(x.shape)
+    dx = dx.reshape(x_shape)
 
     return dx
