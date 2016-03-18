@@ -18,8 +18,8 @@ def random_flips(X):
     N, C, H, W = X.shape
     mask = np.random.randint(2, size=N)
     out = np.zeros_like(X)
-    # np.fliplr(X[mask == 1])
-    out[mask == 1] = X[mask == 1, :, :, ::-1]
+    #  X[mask == 1, :, :, ::-1]
+    out[mask == 1] = np.fliplr(X[mask == 1])
     out[mask == 0] = X[mask == 0]
     return out
 
@@ -78,14 +78,12 @@ def random_rotate(X, max_angle=10):
     out = np.zeros_like(X)
     high = np.abs(max_angle) + 1
     low = - np.abs(max_angle)
-    for i in xrange(N):
-        x = X[i].transpose(1, 2, 0)
-        t = rotate(x, np.random.randint(low, high), resize=False)
+    for i, x in enumerate(X):
+        t = x.transpose(1, 2, 0)
+        t = rotate(t, np.random.randint(low, high), resize=False)
         t = t.transpose(2, 0, 1)
-        #t = t[:, x_start[i]:y_start+HH, x_start[i]:x_start[i]+WW]
 
-
-        out[i] = t#  random_crops(t, X.shape)
+        out[i] = t
     return out
 
 
