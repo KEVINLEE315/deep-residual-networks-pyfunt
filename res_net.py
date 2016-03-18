@@ -3,17 +3,24 @@
 
 import numpy as np
 
-from nnet.layers.layers import log_softmax_loss
-from nnet.layers.layer_utils import conv_batchnorm_relu_forward
-from nnet.layers.layer_utils import conv_batchnorm_relu_backward
-from nnet.layers.layer_utils import affine_batchnorm_relu_forward
-from nnet.layers.layer_utils import affine_batchnorm_relu_backward
-from nnet.layers.layer_utils import skip_forward, skip_backward
-from nnet.layers.layer_utils import avg_pool_forward
-from nnet.layers.layer_utils import avg_pool_backward
-from nnet.layers.layer_utils import affine_forward, affine_backward
-from nnet.layers.init import init_conv_w_kaiming, init_bn_w_gcr, init_bn_w
-from nnet.layers.init import init_affine_wb
+from nnet.layers.layers import (log_softmax_loss,
+                                spatial_batchnorm_forward,
+                                spatial_batchnorm_backward,
+                                relu_forward,
+                                relu_backward)
+
+from nnet.layers.fast_layers import (conv_forward_fast as conv_forward,
+                                     conv_backward_fast as conv_backward)
+
+from nnet.layers.layer_utils import (affine_bn_relu_forward,
+                                     affine_bn_relu_backward,
+                                     skip_forward, skip_backward,
+                                     avg_pool_forward,
+                                     avg_pool_backward,
+                                     affine_forward, affine_backward)
+
+from nnet.layers.init import (init_conv_w_kaiming, init_bn_w_gcr, init_bn_w,
+                              init_affine_wb)
 
 
 class ResNet(object):
@@ -189,9 +196,11 @@ class ResNet(object):
             NSize: %d;
             Numbers of filters for each layer:%s;
             Optional linear layers dimensions: %s;
+            Regularization factor: %f;
         """ % (self.n_size,
                str(self.num_filters),
-               str(self.hidden_dims))
+               str(self.hidden_dims),
+               self.reg)
 
     def _init_filters(self, nf):
         '''
@@ -236,7 +245,7 @@ class ResNet(object):
             bn_param = {'mode': 'train',
                         'running_mean': np.zeros(out_ch),
                         'running_var': np.ones(out_ch)}
-            gamma = init_bn_w(out_ch)
+            gamma = init_bn_w(out_ch) if i % 2 == 0 else init_bn_w_gcr(out_ch)
             beta = np.zeros(out_ch)
             self.bn_params['bn_param%d' % idx] = bn_param
             self.params['gamma%d' % idx] = gamma
@@ -290,33 +299,63 @@ class ResNet(object):
         '''
         return self.loss(*args)
 
-    def loss(self, X, y=None, compute_dX=False, return_probs=False):
+    def _extract(self, params, idx, bn=True):
         '''
-        TODO: split in _functions
-        Evaluate loss and gradient for the three-layer convolutional network.
-
+        Ectract Parameters from params
         '''
-        X = X.astype(self.dtype)
-        mode = 'test' if y is None else 'train'
-        params = self.params
-        conv_param1 = self.conv_param1
-        conv_param2 = self.conv_param2
-        pool_param2 = self.pool_param2
-        for key, bn_param in self.bn_params.iteritems():
-            bn_param[mode] = mode
-        scores = None
-
-        cache = {}
-        cache['h0'] = X
-        # Forward into the conv blocks
-        for i in xrange(self.conv_layers):
-            idx = i + 1
-            w = params['W%d' % idx]
-            b = params['b%d' % idx]
-            h = cache['h%d' % (idx - 1)]
+        w = params['W%d' % idx]
+        b = params['b%d' % idx]
+        if bn:
             beta = params['beta%d' % idx]
             gamma = params['gamma%d' % idx]
             bn_param = self.bn_params['bn_param%d' % idx]
+            return w, b, beta, gamma, bn_param
+        return w, b
+
+    def _put(self, cache, idx, h, cache_h):
+        '''
+        Put h and h_cache in cache
+        '''
+        cache['h%d' % idx] = h
+        cache['cache_h%d' % idx] = cache_h
+        return cache
+
+    def _put_grads(self, cache, idx, dh, dw, db, dbeta=None, dgamma=None):
+        '''
+        Put grads in cache
+        '''
+        cache['dh%d' % (idx - 1)] = dh
+        cache['dW%d' % idx] = dw
+        cache['db%d' % idx] = db
+        if dbeta is not None:
+            cache['dbeta%d' % idx] = dbeta
+            cache['dgamma%d' % idx] = dgamma
+        return cache
+
+    def _forward_first_conv(self, cache):
+        i = 0
+        idx = i + 1
+        h = cache['h%d' % (idx - 1)]
+        w, b, beta, gamma, bn_param = self._extract(self.params, idx)
+
+        conv_param = self.conv_param1
+
+        c_out, conv_cache = conv_forward(h, w, b, conv_param)
+        bn_out, batchnorm_cache = spatial_batchnorm_forward(
+            c_out, gamma, beta, bn_param)
+        h, relu_cache = relu_forward(bn_out)
+        cache_h = (conv_cache, batchnorm_cache, relu_cache)
+
+        self._put(cache, idx, h, cache_h)
+
+    def _forward_convs(self, cache):
+        '''
+        Execute convolution layers' forward pass
+        '''
+        for i in xrange(1, self.conv_layers):
+            idx = i + 1
+            h = cache['h%d' % (idx - 1)]
+            w, b, beta, gamma, bn_param = self._extract(self.params, idx)
 
             out_ch, in_ch = w.shape[:2]
             if i > 0 and i % 2 == 1:
@@ -324,53 +363,163 @@ class ResNet(object):
                 skip, skip_cache = skip_forward(h, out_ch)
                 cache['cache_skip%d' % idx] = skip_cache
             if i == 0 or in_ch == out_ch:
-                conv_param = conv_param1
+                conv_param = self.conv_param1
             else:
-                conv_param = conv_param2
+                conv_param = self.conv_param2
                 h = np.pad(
                     h, ((0, 0), (0, 0), (1, 0), (1, 0)), mode='constant')
 
-            h, cache_h = conv_batchnorm_relu_forward(
-                h, w, b, conv_param, gamma, beta, bn_param)
+            c_out, conv_cache = conv_forward(h, w, b, conv_param)
+            bn_out, batchnorm_cache = spatial_batchnorm_forward(
+                c_out, gamma, beta, bn_param)
+            h, relu_cache = relu_forward(bn_out)
+            cache_h = (conv_cache, batchnorm_cache, relu_cache)
 
             if i > 0 and i % 2 == 0:
                 # add skip
                 h += skip
-            cache['h%d' % idx] = h
-            cache['cache_h%d' % idx] = cache_h
+            self._put(cache, idx, h, cache_h)
 
-        # Pool
-        idx = self.pool_l
-        h = cache['h%d' % (idx - 1)]
-        h, cache_h = avg_pool_forward(h, pool_param2)
-        cache['h%d' % idx] = h
-        cache['cache_h%d' % idx] = cache_h
-
-        # Forward into the linear blocks
+    def _forward_affines(self, cache):
+        '''
+        Execute affine layers's forward pass
+        '''
         for i in xrange(self.affine_layers):
             idx = self.affine_l + i
             h = cache['h%d' % (idx - 1)]
+            w, b, beta, gamma, bn_param = self._extract(self.params, idx)
 
-            w = params['W%d' % idx]
-            b = params['b%d' % idx]
-            beta = params['beta%d' % idx]
-            gamma = params['gamma%d' % idx]
-            bn_param = self.bn_params['bn_param%d' % idx]
-            h, cache_h = affine_batchnorm_relu_forward(h, w, b, gamma,
-                                                       beta, bn_param)
-            cache['h%d' % idx] = h
-            cache['cache_h%d' % idx] = cache_h
+            h, cache_h = affine_bn_relu_forward(h, w, b, gamma,
+                                                beta, bn_param)
+            self._put(cache, idx, h, cache_h)
 
-        # Forward into the score layer
+    def _forward_pool(self, cache):
+        '''
+        Execute pooling layer's forward pass
+        '''
+        idx = self.pool_l
+        h = cache['h%d' % (idx - 1)]
+        h, cache_h = avg_pool_forward(h, self.pool_param2)
+        self._put(cache, idx, h, cache_h)
+
+    def _forward_score_layer(self, cache):
+        '''
+        Execute softmax layer's forward pass
+        '''
         idx = self.softmax_l
-        w = params['W%d' % idx]
-        b = params['b%d' % idx]
+        w, b = self._extract(self.params, idx, bn=False)
         h = cache['h%d' % (idx - 1)]
         h, cache_h = affine_forward(h, w, b)
-        cache['h%d' % idx] = h
-        cache['cache_h%d' % idx] = cache_h
+        self._put(cache, idx, h, cache_h)
 
-        scores = cache['h%d' % idx]
+    def _backward_score_layer(self, dscores, cache):
+        '''
+        Execute softmax layer's backward pass
+        '''
+        idx = self.softmax_l
+        dh = dscores
+        h_cache = cache['cache_h%d' % idx]
+        dh, dw, db = affine_backward(dh, h_cache)
+        self._put_grads(cache, idx, dh, dw, db)
+
+    def _backward_pool(self, cache):
+        '''
+        Execute pooling layer's backward pass
+        '''
+        idx = self.pool_l
+        dh = cache['dh%d' % idx]
+        h_cache = cache['cache_h%d' % idx]
+        dh = avg_pool_backward(dh, h_cache)
+        cache['dh%d' % (idx - 1)] = dh
+
+    def _backward_affines(self, cache):
+        '''
+        Execute affine layers' backward pass
+        '''
+        for i in range(self.affine_layers)[::-1]:
+            idx = self.affine_l + i
+            dh = cache['dh%d' % idx]
+            h_cache = cache['cache_h%d' % idx]
+            dh, dw, db, dgamma, dbeta = affine_bn_relu_backward(
+                dh, h_cache)
+            self._put_grads(cache, idx, dh, dw, db, dbeta, dgamma)
+
+    def _backward_convs(self, cache):
+        '''
+        Execute convolution layers' backward pass
+        '''
+        for i in range(1, self.conv_layers)[::-1]:
+            idx = i + 1
+            dh = cache['dh%d' % idx]
+            h_cache = cache['cache_h%d' % idx]
+            w = self.params['W%d' % idx]
+
+            out_ch, in_ch = w.shape[:2]
+            if i > 0 and i % 2 == 0:
+                skip_cache = cache['cache_skip' + str(idx-1)]
+                dskip = skip_backward(dh, skip_cache)
+
+            if i == self.conv_layers-1:
+                dh = dh.reshape(*cache['h%d' % idx].shape)
+
+            conv_cache, batchnorm_cache, relu_cache = h_cache
+            dbn = relu_backward(dh, relu_cache)
+            dconv, dgamma, dbeta = spatial_batchnorm_backward(dbn, batchnorm_cache)
+            dh, dw, db = conv_backward(dconv, conv_cache)
+
+            if not(i == 0 or in_ch == out_ch):
+                # back pad trick
+                dh = dh[:, :, 1:, 1:]
+
+            if i > 0 and i % 2 == 1:
+                dh += dskip
+
+            self._put_grads(cache, idx, dh, dw, db, dbeta, dgamma)
+
+    def _backward_first_conv(self, cache):
+        '''
+        Execute convolution layers' backward pass
+        '''
+        i = 0
+        idx = i + 1
+        dh = cache['dh%d' % idx]
+        h_cache = cache['cache_h%d' % idx]
+
+        if i == self.conv_layers-1:
+            dh = dh.reshape(*cache['h%d' % idx].shape)
+
+        conv_cache, batchnorm_cache, relu_cache = h_cache
+        dbn = relu_backward(dh, relu_cache)
+        dconv, dgamma, dbeta = spatial_batchnorm_backward(dbn, batchnorm_cache)
+        dh, dw, db = conv_backward(dconv, conv_cache)
+
+        self._put_grads(cache, idx, dh, dw, db, dbeta, dgamma)
+
+    def loss(self, X, y=None, compute_dX=False, return_probs=False):
+        '''
+        Evaluate loss and gradient for the three-layer convolutional network.
+        '''
+        X = X.astype(self.dtype)
+        mode = 'test' if y is None else 'train'
+        params = self.params
+        for key, bn_param in self.bn_params.iteritems():
+            bn_param[mode] = mode
+        scores = None
+
+        cache = {}
+        cache['h0'] = X
+
+        self._forward_first_conv(cache)
+
+        self._forward_convs(cache)
+
+        self._forward_pool(cache)
+
+        self._forward_affines(cache)
+
+        self._forward_score_layer(cache)
+
+        scores = cache['h%d' % self.softmax_l]
 
         if y is None:
             if return_probs:
@@ -385,63 +534,15 @@ class ResNet(object):
         data_loss, dscores = log_softmax_loss(scores, y)
 
         # Backward pass
-        # Backprop into the scoring layer
-        idx = self.softmax_l
-        dh = dscores
-        h_cache = cache['cache_h%d' % idx]
-        dh, dw, db = affine_backward(dh, h_cache)
-        cache['dh%d' % (idx - 1)] = dh
-        cache['dW%d' % idx] = dw
-        cache['db%d' % idx] = db
+        self._backward_score_layer(dscores, cache)
 
-        # Backprop into the linear blocks
-        for i in range(self.affine_layers)[::-1]:
-            idx = self.affine_l + i
-            dh = cache['dh%d' % idx]
-            h_cache = cache['cache_h%d' % idx]
-            dh, dw, db, dgamma, dbeta = affine_batchnorm_relu_backward(
-                dh, h_cache)
-            cache['dbeta%d' % idx] = dbeta
-            cache['dgamma%d' % idx] = dgamma
-            cache['dh%d' % (idx - 1)] = dh
-            cache['dW%d' % idx] = dw
-            cache['db%d' % idx] = db
+        self._backward_affines(cache)
 
-        # back pool
-        idx = self.pool_l
-        dh = cache['dh%d' % idx]
-        h_cache = cache['cache_h%d' % idx]
-        dh = avg_pool_backward(dh, h_cache)
-        cache['dh%d' % (idx - 1)] = dh
+        self._backward_pool(cache)
 
-        # Backprop into the conv blocks
-        for i in range(self.conv_layers)[::-1]:
-            idx = i + 1
-            dh = cache['dh%d' % idx]
-            h_cache = cache['cache_h%d' % idx]
-            w = params['W%d' % idx]
-            out_ch, in_ch = w.shape[:2]
-            if i > 0 and i % 2 == 0:
-                skip_cache = cache['cache_skip' + str(idx-1)]
-                dskip = skip_backward(dh, skip_cache)
+        self._backward_convs(cache)
 
-            if i == self.conv_layers-1:
-                dh = dh.reshape(*cache['h%d' % idx].shape)
-
-            dh, dw, db, dgamma, dbeta = conv_batchnorm_relu_backward(
-                dh, h_cache)
-            if not(i == 0 or in_ch == out_ch):
-                # back pad trick
-                dh = dh[:, :, 1:, 1:]
-
-            cache['dbeta%d' % idx] = dbeta
-            cache['dgamma%d' % idx] = dgamma
-
-            if i > 0 and i % 2 == 1:
-                dh += dskip
-            cache['dh%d' % (idx - 1)] = dh
-            cache['dW%d' % idx] = dw
-            cache['db%d' % idx] = db
+        self._backward_first_conv(cache)
 
         if compute_dX:
             return cache['dh0']
@@ -449,9 +550,8 @@ class ResNet(object):
         # apply regularization to ALL parameters except softmax parameters
         grads = {}
         reg_loss = .0
-
         for key, val in cache.iteritems():
-            if key[:1] == 'd' and 'h' not in key:
+            if key[:1] == 'd' and 'h' not in key:  # all params gradients
                 reg_term = 0
                 if key[2:] != str(self.softmax_l):
                     reg_term = self.reg * params[key[1:]]
