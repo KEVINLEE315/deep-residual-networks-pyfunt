@@ -133,7 +133,7 @@ Contains the residual network model.
 
 ### train.py
 
-Contains the main loop.
+Contains the main function.
 
 ### requirements.txt
 
