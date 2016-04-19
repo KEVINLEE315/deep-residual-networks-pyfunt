@@ -1,11 +1,11 @@
 ## PyResNet
 
-Residual Network Implementation in PyFunt (a Python + Numpy DL framework, largely inspired by Stanfors's CS321n)
+Residual Network Implementation in [PyFunt](https://github.com/dnlcrl/PyFunt) (a Python + Numpy DL framework, largely inspired by Stanfors's [CS321n](http://cs231n.github.io/))
 
 Implementation of ["Deep Residual Learning for Image Recognition", Kaiming
 He, Xiangyu Zhang, Shaoqing Ren, Jian Sun](http://arxiv.org/abs/1512.03385)
 
-Inspired by https://github.com/gcr/torch-residual-networks and based on [CS321n](http://cs231n.github.io/) assignments solutions.
+Inspired by https://github.com/gcr/torch-residual-networks.
 
 This network should model the same behaviour of gcr's implementation.
 Check https://github.com/gcr/torch-residual-networks for more infos about the structure.
