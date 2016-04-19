@@ -118,4 +118,6 @@ After you get Python, you can get [pip](https://pypi.python.org/pypi/pip) and in
 	
 	pip install -r requirements.txt
 
+## Usage
 
+	python train.py --help
