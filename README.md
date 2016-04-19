@@ -7,9 +7,6 @@ He, Xiangyu Zhang, Shaoqing Ren, Jian Sun](http://arxiv.org/abs/1512.03385)
 
 Inspired by https://github.com/gcr/torch-residual-networks.
 
-This network should model the same behaviour of gcr's implementation.
-Check https://github.com/gcr/torch-residual-networks for more infos about the structure.
-
 The network operates on minibatches of data that have shape (N, C, H, W)
 consisting of N images, each with height H and width W and with C input
 channels.
