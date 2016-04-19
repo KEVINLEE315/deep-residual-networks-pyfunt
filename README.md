@@ -139,19 +139,12 @@ Contains the main function.
 
 Requirements for the project.
 
-## subdirs
-
-Check the README.md found in all sub directories
-
 ## Requirements
 
 - [Python 2.7](https://www.python.org/)
-- [Cython](cython.org/)
-- [matplotlib](matplotlib.org/)
 - [numpy](www.numpy.org/)
-- [scipy](www.scipy.org/)
-- [cv2](opencv.org) (only for loading GTSRB)
-- [scikit_learn](scikit-learn.org/)
+- [pyfunt](https://github.com/dnlcrl/PyFunt)
+- [pydatset](https://github.com/dnlcrl/PyDatSet)
 
 
 After you get Python, you can get [pip](https://pypi.python.org/pypi/pip) and install all requirements by running:
