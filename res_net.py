@@ -3,24 +3,24 @@
 
 import numpy as np
 
-from nnet.layers.layers import (log_softmax_loss,
-                                spatial_batchnorm_forward,
-                                spatial_batchnorm_backward,
-                                relu_forward,
-                                relu_backward)
+from pyfunt.layers.layers import (log_softmax_loss,
+                                  spatial_batchnorm_forward,
+                                  spatial_batchnorm_backward,
+                                  relu_forward,
+                                  relu_backward)
 
-from nnet.layers.fast_layers import (conv_forward_fast as conv_forward,
-                                     conv_backward_fast as conv_backward)
+from pyfunt.layers.fast_layers import (conv_forward_fast as conv_forward,
+                                       conv_backward_fast as conv_backward)
 
-from nnet.layers.layer_utils import (affine_bn_relu_forward,
-                                     affine_bn_relu_backward,
-                                     skip_forward, skip_backward,
-                                     avg_pool_forward,
-                                     avg_pool_backward,
-                                     affine_forward, affine_backward)
+from pyfunt.layers.layer_utils import (affine_bn_relu_forward,
+                                       affine_bn_relu_backward,
+                                       skip_forward, skip_backward,
+                                       avg_pool_forward,
+                                       avg_pool_backward,
+                                       affine_forward, affine_backward)
 
-from nnet.layers.init import (init_conv_w_kaiming, init_bn_w_gcr, init_bn_w,
-                              init_affine_wb)
+from pyfunt.layers.init import (init_conv_w_kaiming, init_bn_w_disp, init_bn_w,
+                                init_affine_wb)
 
 
 class ResNet(object):
@@ -245,7 +245,7 @@ class ResNet(object):
             bn_param = {'mode': 'train',
                         'running_mean': np.zeros(out_ch),
                         'running_var': np.ones(out_ch)}
-            gamma = init_bn_w(out_ch) if i % 2 == 0 else init_bn_w_gcr(out_ch)
+            gamma = init_bn_w(out_ch) #if i % 2 == 0 else init_bn_w_disp(out_ch)
             beta = np.zeros(out_ch)
             self.bn_params['bn_param%d' % idx] = bn_param
             self.params['gamma%d' % idx] = gamma
@@ -291,13 +291,6 @@ class ResNet(object):
         i = self.softmax_l
         self.params['W%d' % i] = W
         self.params['b%d' % i] = b
-
-    def loss_helper(self, args):
-        '''
-        Helper method used to call loss() within a pool of processes using \
-        pool.map_async.
-        '''
-        return self.loss(*args)
 
     def _extract(self, params, idx, bn=True):
         '''
@@ -464,7 +457,8 @@ class ResNet(object):
 
             conv_cache, batchnorm_cache, relu_cache = h_cache
             dbn = relu_backward(dh, relu_cache)
-            dconv, dgamma, dbeta = spatial_batchnorm_backward(dbn, batchnorm_cache)
+            dconv, dgamma, dbeta = spatial_batchnorm_backward(
+                dbn, batchnorm_cache)
             dh, dw, db = conv_backward(dconv, conv_cache)
 
             if not(i == 0 or in_ch == out_ch):
@@ -494,6 +488,13 @@ class ResNet(object):
         dh, dw, db = conv_backward(dconv, conv_cache)
 
         self._put_grads(cache, idx, dh, dw, db, dbeta, dgamma)
+
+    def loss_helper(self, args):
+        '''
+        Helper method used to call loss() within a pool of processes using \
+        pool.map_async.
+        '''
+        return self.loss(*args)
 
     def loss(self, X, y=None, compute_dX=False, return_probs=False):
         '''
@@ -547,13 +548,13 @@ class ResNet(object):
         if compute_dX:
             return cache['dh0']
 
-        # apply regularization to ALL parameters except softmax parameters
+        # apply regularization to ALL parameters
         grads = {}
         reg_loss = .0
         for key, val in cache.iteritems():
             if key[:1] == 'd' and 'h' not in key:  # all params gradients
                 reg_term = 0
-                if key[2:] != str(self.softmax_l):
+                if self.reg:
                     reg_term = self.reg * params[key[1:]]
                     w = params[key[1:]]
                     reg_loss += 0.5 * self.reg * np.sum(w * w)
