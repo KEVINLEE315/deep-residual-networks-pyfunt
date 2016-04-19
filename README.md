@@ -1,6 +1,6 @@
 ## PyResNet
 
-Residual Network Implementation in PyFunt (a Python + Numpy DL framework, largely inspired by Stanfors's CS321N)
+Residual Network Implementation in PyFunt (a Python + Numpy DL framework, largely inspired by Stanfors's CS321n)
 
 Implementation of ["Deep Residual Learning for Image Recognition", Kaiming
 He, Xiangyu Zhang, Shaoqing Ren, Jian Sun](http://arxiv.org/abs/1512.03385)
