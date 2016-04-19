@@ -2,7 +2,7 @@
 
 Residual Network Implementation in Python + Numpy, Inspired by Stanfors's CS321N
 
-Implementation of ["Deep Residual Learning for Image Recognition",Kaiming
+Implementation of ["Deep Residual Learning for Image Recognition", Kaiming
 He, Xiangyu Zhang, Shaoqing Ren, Jian Sun](http://arxiv.org/abs/1512.03385)
 
 Inspired by https://github.com/gcr/torch-residual-networks and based on [CS321n](http://cs231n.github.io/) assignments solutions.
@@ -153,8 +153,9 @@ Check the README.md found in all sub directories
 - [cv2](opencv.org) (only for loading GTSRB)
 - [scikit_learn](scikit-learn.org/)
 
+
 After you get Python, you can get [pip](https://pypi.python.org/pypi/pip) and install all requirements by running:
 	
-	pip install -r /path/to/requirements.txt
+	pip install -r requirements.txt
 
 
