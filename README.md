@@ -85,7 +85,7 @@ Each residual block is composed as below:
 
 After every layer, a batch normalization with momentum .1 is applied.
 
-# Experiments
+#<!-- Experiments
 
 Model has 6*nSize+2 layers. 
 
@@ -118,7 +118,7 @@ In all cases I also applied random mirroring like gcr's implementation.
 ## Images not recognized
 
 ## Fooling the Network
-
+-->
 ## Directory Structure
 	.
 	+-- __init__.py
