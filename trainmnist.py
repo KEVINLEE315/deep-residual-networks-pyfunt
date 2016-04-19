@@ -32,9 +32,9 @@ WEIGHT_DEACY = 1e-4
 REGULARIZATION = 0
 LEARNING_RATE = .1
 MOMENTUM = .99
-NUM_EPOCHS = 160
+NUM_EPOCHS = 30
 BATCH_SIZE = 64
-CHECKPOINT_EVERY = 20
+CHECKPOINT_EVERY = 2
 
 XH, XW = 32, 32
 
@@ -135,13 +135,13 @@ def data_augm(batch):
     # batch = random_tint(batch)
     # batch = random_contrast(batch)
     # batch = random_flips(batch)
-    # batch = random_rotate(batch, 10)
+    #batch = random_rotate(batch, 5)
     batch = random_crops(batch, (h, w), pad=p)
     return batch
 
 
 def custom_update_decay(epoch):
-    if epoch in (80, 120):
+    if epoch in (10, 20):
         return 0.1
     return 1
 
