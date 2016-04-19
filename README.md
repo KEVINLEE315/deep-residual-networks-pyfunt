@@ -86,26 +86,6 @@ Each residual block is composed as below:
 After every layer, a batch normalization with momentum .1 is applied.
 
 
-## Directory Structure
-	.
-	+-- __init__.py
-	+-- nnet/
-	+-- res_net.py
-	+-- train.py
-	+-- requirements.txt
-
-### res_net.py
-
-Contains the residual network model.
-
-### train.py
-
-Contains the main function.
-
-### requirements.txt
-
-Requirements for the project.
-
 ## Requirements
 
 - [Python 2.7](https://www.python.org/)
