@@ -5,7 +5,7 @@ import uuid
 import numpy as np
 # import matplotlib.pyplot as plt
 from pydatset.mnist import get_data
-from pydatset.data_augmentation import random_crops
+from pydatset.data_augmentation import random_crops, elastic_transform
 from res_net import ResNet
 from pyfunt.solver import Solver as Solver
 
@@ -32,7 +32,7 @@ WEIGHT_DEACY = 1e-4
 REGULARIZATION = 0
 LEARNING_RATE = .1
 MOMENTUM = .99
-NUM_EPOCHS = 30
+NUM_EPOCHS = 60
 BATCH_SIZE = 64
 CHECKPOINT_EVERY = 2
 
@@ -128,6 +128,12 @@ def parse_args():
     assert not (args.network_regularization and args.weight_decay)
 
 
+def elast(x):
+    x = x.reshape(32, 32)
+    return elastic_transform(x, alpha=15, sigma=10, negated=True)
+
+
+
 def data_augm(batch):
     p = 2
     h, w = XH, XW
@@ -136,12 +142,16 @@ def data_augm(batch):
     # batch = random_contrast(batch)
     # batch = random_flips(batch)
     #batch = random_rotate(batch, 5)
+    for i in range(len(batch)):
+        batch[i] = elast(batch[i])
+
+    batch = batch.reshape(-1, 1, 32, 32)
     batch = random_crops(batch, (h, w), pad=p)
     return batch
 
 
 def custom_update_decay(epoch):
-    if epoch in (10, 20):
+    if epoch in (20, 40):
         return 0.1
     return 1
 
@@ -160,7 +170,7 @@ def print_infos(solver):
 def main():
     parse_args()
 
-    data = get_data(args.dataset_path)
+    data = get_data(args.dataset_path, mode='std')
 
     data = {
         'X_train': data['X_train'],
@@ -168,8 +178,10 @@ def main():
         'X_val': data['X_test'],
         'y_val': data['y_test'],
     }
-    data['X_train'] = np.pad(data['X_train'], ((0, 0), (0, 0), (2, 2), (2, 2)), mode='constant')
-    data['X_val'] = np.pad(data['X_val'], ((0, 0), (0, 0), (2, 2), (2, 2)), mode='constant')
+    data['X_train'] = np.pad(
+        data['X_train'], ((0, 0), (0, 0), (2, 2), (2, 2)), mode='constant')
+    data['X_val'] = np.pad(
+        data['X_val'], ((0, 0), (0, 0), (2, 2), (2, 2)), mode='constant')
 
     exp_path = args.experiment_path
     nf = args.n_starting_filters
