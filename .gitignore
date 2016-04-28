@@ -27,7 +27,7 @@ __pycache__/
 # C extensions
 *.so
 
-./export_cp.py
+export_cp.py
 
 # Distribution / packaging
 .Python
