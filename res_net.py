@@ -170,10 +170,14 @@ class ResNet(object):
         self.pool_l = self.conv_layers + 1
         self.softmax_l = self.conv_layers + self.affine_layers + 2
         self.affine_l = self.conv_layers + 2
+        self.return_probs = False
 
         self._init_conv_weights()
 
-        self.pool_param2 = {'stride': 8, 'pool_height': 8, 'pool_width': 8}
+        assert (self.input_dim[-1] % 4) == 0
+        p = self.input_dim[-1] / 4
+        self.final_pool_param = {
+            'stride': p, 'pool_height': p, 'pool_width': p}
 
         self.h_dims = (
             [hidden_dims[0]] if len(hidden_dims) > 0 else []) + hidden_dims
@@ -245,7 +249,8 @@ class ResNet(object):
             bn_param = {'mode': 'train',
                         'running_mean': np.zeros(out_ch),
                         'running_var': np.ones(out_ch)}
-            gamma = init_bn_w(out_ch) #if i % 2 == 0 else init_bn_w_disp(out_ch)
+            # if i % 2 == 0 else init_bn_w_disp(out_ch)
+            gamma = init_bn_w(out_ch)
             beta = np.zeros(out_ch)
             self.bn_params['bn_param%d' % idx] = bn_param
             self.params['gamma%d' % idx] = gamma
@@ -392,7 +397,7 @@ class ResNet(object):
         '''
         idx = self.pool_l
         h = cache['h%d' % (idx - 1)]
-        h, cache_h = avg_pool_forward(h, self.pool_param2)
+        h, cache_h = avg_pool_forward(h, self.final_pool_param)
         self._put(cache, idx, h, cache_h)
 
     def _forward_score_layer(self, cache):
@@ -496,7 +501,7 @@ class ResNet(object):
         '''
         return self.loss(*args)
 
-    def loss(self, X, y=None, compute_dX=False, return_probs=False):
+    def loss(self, X, y=None, compute_dX=False):
         '''
         Evaluate loss and gradient for the three-layer convolutional network.
         '''
@@ -523,7 +528,7 @@ class ResNet(object):
         scores = cache['h%d' % self.softmax_l]
 
         if y is None:
-            if return_probs:
+            if self.return_probs:
                 probs = np.exp(scores - np.max(scores, axis=1, keepdims=True))
                 probs /= np.sum(probs, axis=1, keepdims=True)
                 return probs
