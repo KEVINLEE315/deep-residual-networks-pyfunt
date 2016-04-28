@@ -95,4 +95,33 @@ After you get Python, you can get [pip](https://pypi.python.org/pypi/pip) and in
 
 ## Usage
 
+If you want to train the network on the CIFAR-10 dataset, simply run:
+
 	python train.py --help
+	
+Otherwise, you have to get the right train.py for MNIST or SFDDD datasets, they are respectively on the mnist and sfddd git branches:
+
+	- train.py for MNIST: https://github.com/dnlcrl/PyResNet/blob/mnist/train.py
+	- train.py for SFDDD: https://github.com/dnlcrl/PyResNet/blob/sfddd/train.py
+
+## Experiments Results
+
+You can view all the experiments results in the [./docs directory](https://github.com/dnlcrl/PyResNet/tree/master/docs). Main results are shown below:
+
+###  [CIFAR-10](https://www.cs.toronto.edu/~kriz/cifar.html)
+
+best error: 9.59 % (accuracy: 0.9041) with a 20 layers residual network (n=3):
+
+[![CIFAR-10 results](https://github.com/dnlcrl/PyResNet/blob/master/docs/imgs/cifar.png)](https://github.com/dnlcrl/PyResNet/blob/master/docs/CIFAR-10%20Experiments.ipynb)
+
+###  [MNIST](http://yann.lecun.com/exdb/mnist/)
+
+best error: 0.36 % (accuracy: 0.9964) with a 44 layers residual network (n=7):
+
+[![MNIST results](https://github.com/dnlcrl/PyResNet/blob/master/docs/imgs/mnistres.png)](https://github.com/dnlcrl/PyResNet/blob/master/docs/MNIST%20Experiments.ipynb)
+
+###  [SFDDD](https://www.kaggle.com/c/state-farm-distracted-driver-detection)
+
+best error: 0.25 % (accuracy: 0.9975 %) on a subset (1000 samples) of the train data (~21k images) with a 44 layers residual network (n=7), resizing the images to 64x48, randomly cropping 32x32 images for training and cropping a 32x32 image from the center of the original images for testing. Unfortunately I got more than 2% error on Kaggle's results (composed of ~80k images).
+	
+WIP
