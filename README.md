@@ -1,9 +1,7 @@
-## PyResNet
-
-Residual Network Implementation in [PyFunt](https://github.com/dnlcrl/PyFunt) (a simple Python + Numpy DL framework)
+# Deep Residual Learning for Image Recognition
 
 Implementation of ["Deep Residual Learning for Image Recognition", Kaiming
-He, Xiangyu Zhang, Shaoqing Ren, Jian Sun](http://arxiv.org/abs/1512.03385)
+He, Xiangyu Zhang, Shaoqing Ren, Jian Sun](http://arxiv.org/abs/1512.03385) in [PyFunt](https://github.com/dnlcrl/PyFunt) (a simple Python + Numpy DL framework).
 
 Also inspired by [this implementation in Lua + Torch](https://github.com/gcr/torch-residual-networks).
 
