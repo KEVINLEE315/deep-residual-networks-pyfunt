@@ -116,7 +116,7 @@ best error: 9.59 % (accuracy: 0.9041) with a 20 layers residual network (n=3):
 
 ###  [MNIST](http://yann.lecun.com/exdb/mnist/)
 
-best error: 0.36 % (accuracy: 0.9964) with a 44 layers residual network (n=5):
+best error: 0.36 % (accuracy: 0.9964) with a 32 layers residual network (n=5):
 
 [![MNIST results](https://github.com/dnlcrl/PyResNet/blob/master/docs/imgs/mnistres.png)](https://github.com/dnlcrl/PyResNet/blob/master/docs/MNIST%20Experiments.ipynb)
 
