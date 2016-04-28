@@ -4,9 +4,8 @@
 import uuid
 import numpy as np
 # import matplotlib.pyplot as plt
-from pydatset.cifar10 import get_CIFAR10_data
-from pydatset.data_augmentation import (random_flips,
-                                        random_crops)
+from pydatset.mnist import get_data
+from pydatset.data_augmentation import random_crops, elastic_transform
 from res_net import ResNet
 from pyfunt.solver import Solver as Solver
 
@@ -15,39 +14,27 @@ import argparse
 
 np.random.seed(0)
 
-DATA_PATH = 'CIFAR_DATASET_PATH'
+DATASET_PATH = './MNIST'
 
-path_set = False
-while not path_set:
-    try:
-        with open(DATA_PATH) as f:
-            DATASET_PATH = f.read()
-        path_set = True
-    except:
-        data_path = raw_input('Enter the path for the CIFAR10 dataset: ')
-        with open(DATA_PATH, "w") as f:
-            f.write(data_path)
-
-
-EXPERIMENT_PATH = '../Experiments/' + str(uuid.uuid4())[-10:]
+EXPERIMENT_PATH = '../Experiments/%s/' % str(uuid.uuid4())[-10:]
 
 # residual network constants
 NSIZE = 3
-N_STARTING_FILTERS = 16
+N_STARTING_FILTERS = 8
 
 # solver constants
 NUM_PROCESSES = 4
 
-NUM_TRAIN = 50000
+NUM_TRAIN = 60000
 NUM_TEST = 10000
 
 WEIGHT_DEACY = 1e-4
 REGULARIZATION = 0
 LEARNING_RATE = .1
 MOMENTUM = .99
-NUM_EPOCHS = 160
+NUM_EPOCHS = 60
 BATCH_SIZE = 64
-CHECKPOINT_EVERY = 20
+CHECKPOINT_EVERY = 2
 
 XH, XW = 32, 32
 
@@ -58,7 +45,7 @@ def parse_args():
     """
     Parse the options for running the Residual Network on CIFAR-10.
     """
-    desc = 'Train a Residual Network on CIFAR-10.'
+    desc = 'Train a Residual Network on MNIST.'
     parser = argparse.ArgumentParser(description=desc,
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add = parser.add_argument
@@ -141,20 +128,30 @@ def parse_args():
     assert not (args.network_regularization and args.weight_decay)
 
 
+def elast(x):
+    x = x.reshape(32, 32)
+    return elastic_transform(x, alpha=15, sigma=10, negated=True)
+
+
+
 def data_augm(batch):
     p = 2
     h, w = XH, XW
 
     # batch = random_tint(batch)
     # batch = random_contrast(batch)
-    batch = random_flips(batch)
-    # batch = random_rotate(batch, 10)
+    # batch = random_flips(batch)
+    #batch = random_rotate(batch, 5)
+    for i in range(len(batch)):
+        batch[i] = elast(batch[i])
+
+    batch = batch.reshape(-1, 1, 32, 32)
     batch = random_crops(batch, (h, w), pad=p)
     return batch
 
 
 def custom_update_decay(epoch):
-    if epoch in (80, 120):
+    if epoch in (20, 40):
         return 0.1
     return 1
 
@@ -173,8 +170,7 @@ def print_infos(solver):
 def main():
     parse_args()
 
-    data = get_CIFAR10_data(args.dataset_path,
-                            num_training=args.n_train, num_validation=0, num_test=args.n_test)
+    data = get_data(args.dataset_path, mode='std')
 
     data = {
         'X_train': data['X_train'],
@@ -182,12 +178,16 @@ def main():
         'X_val': data['X_test'],
         'y_val': data['y_test'],
     }
+    data['X_train'] = np.pad(
+        data['X_train'], ((0, 0), (0, 0), (2, 2), (2, 2)), mode='constant')
+    data['X_val'] = np.pad(
+        data['X_val'], ((0, 0), (0, 0), (2, 2), (2, 2)), mode='constant')
 
     exp_path = args.experiment_path
     nf = args.n_starting_filters
     reg = args.network_regularization
 
-    model = ResNet(n_size=args.n_size,
+    model = ResNet(n_size=args.n_size, input_dim=(1, 32, 32),
                    num_starting_filters=nf,
                    reg=reg)
 
