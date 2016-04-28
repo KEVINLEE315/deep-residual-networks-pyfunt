@@ -129,7 +129,7 @@ WIP
 
 - regenerate plots with english labels
 
-- experimentat elastic distortion as data augmentation funcion on MNIST
+- experiment elastic distortion as data augmentation funcion on MNIST
 
 - experiment other data augmentation funcions on SFDDD
 
