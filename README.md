@@ -101,8 +101,9 @@ If you want to train the network on the CIFAR-10 dataset, simply run:
 	
 Otherwise, you have to get the right train.py for MNIST or SFDDD datasets, they are respectively on the mnist and sfddd git branches:
 
-	- train.py for MNIST: https://github.com/dnlcrl/PyResNet/blob/mnist/train.py
-	- train.py for SFDDD: https://github.com/dnlcrl/PyResNet/blob/sfddd/train.py
+- train.py for MNIST: https://github.com/dnlcrl/PyResNet/blob/mnist/train.py
+
+- train.py for SFDDD: https://github.com/dnlcrl/PyResNet/blob/sfddd/train.py
 
 ## Experiments Results
 
