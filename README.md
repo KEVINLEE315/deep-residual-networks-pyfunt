@@ -125,3 +125,13 @@ best error: 0.36 % (accuracy: 0.9964) with a 44 layers residual network (n=7):
 best error: 0.25 % (accuracy: 0.9975 %) on a subset (1000 samples) of the train data (~21k images) with a 44 layers residual network (n=7), resizing the images to 64x48, randomly cropping 32x32 images for training and cropping a 32x32 image from the center of the original images for testing. Unfortunately I got more than 2% error on Kaggle's results (composed of ~80k images).
 	
 WIP
+
+## TODOs:
+
+- regenerate plots with english labels
+
+- experiment elastic distortion as data augmentation funcion on MNIST
+
+- experiment other data augmentation funcions on SFDDD
+
+- implement the second version of residual networks, as explained in ["Identity Mappings in Deep Residual Networks" by Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun](http://arxiv.org/pdf/1603.05027v1.pdf) 
