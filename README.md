@@ -128,10 +128,10 @@ WIP
 
 ## TODOs:
 
-- regenerate plots with english labels
+- regeneration of plots with english labels
 
-- experiment elastic distortion as data augmentation funcion on MNIST
+- experimentation of elastic distortion as data augmentation funcion on MNIST
 
-- experiment other data augmentation funcions on SFDDD
+- experimentation of other data augmentation funcions on SFDDD
 
-- implement the second version of residual networks, as explained in ["Identity Mappings in Deep Residual Networks" by Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun](http://arxiv.org/pdf/1603.05027v1.pdf) 
+- implementation of the second version of residual networks, as explained in ["Identity Mappings in Deep Residual Networks" by Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun](http://arxiv.org/pdf/1603.05027v1.pdf) 
