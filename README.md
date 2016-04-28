@@ -5,7 +5,7 @@ Residual Network Implementation in [PyFunt](https://github.com/dnlcrl/PyFunt) (a
 Implementation of ["Deep Residual Learning for Image Recognition", Kaiming
 He, Xiangyu Zhang, Shaoqing Ren, Jian Sun](http://arxiv.org/abs/1512.03385)
 
-Also inspired by this implementation in Torch: [torch-residual-networks](https://github.com/gcr/torch-residual-networks).
+Also inspired by [this implementation in Lua + Torch](https://github.com/gcr/torch-residual-networks).
 
 The network operates on minibatches of data that have shape (N, C, H, W)
 consisting of N images, each with height H and width W and with C input
