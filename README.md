@@ -132,7 +132,7 @@ best error: 0.25 % (accuracy: 0.9975 %) on a subset (1000 samples) of the train 
 	
 [SFDDD Results - iPython notebook](https://github.com/dnlcrl/PyResNet/blob/master/docs/SFDDD%20Experiments.ipynb)
 
-## TODOs:
+<!--## TODOs:
 
 - regenerate plots with english labels
 
@@ -140,4 +140,4 @@ best error: 0.25 % (accuracy: 0.9975 %) on a subset (1000 samples) of the train 
 
 - experiment other data augmentation functions on SFDDD
 
-- implementation of the second version of residual networks, as explained in ["Identity Mappings in Deep Residual Networks" by Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun](http://arxiv.org/pdf/1603.05027v1.pdf) 
+- implementation of the second version of residual networks, as explained in ["Identity Mappings in Deep Residual Networks" by Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun](http://arxiv.org/pdf/1603.05027v1.pdf) -->
