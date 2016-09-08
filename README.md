@@ -113,17 +113,24 @@ best error: 9.59 % (accuracy: 0.9041) with a 20 layers residual network (n=3):
 
 [![CIFAR-10 results](https://github.com/dnlcrl/PyResNet/blob/master/docs/imgs/cifar.png)](https://github.com/dnlcrl/PyResNet/blob/master/docs/CIFAR-10%20Experiments.ipynb)
 
+[CIFAR-10 Results - iPython notebook](https://github.com/dnlcrl/PyResNet/blob/master/docs/CIFAR-10%20Experiments.ipynb)
+
 ###  [MNIST](http://yann.lecun.com/exdb/mnist/)
 
 best error: 0.36 % (accuracy: 0.9964) with a 32 layers residual network (n=5):
 
 [![MNIST results](https://github.com/dnlcrl/PyResNet/blob/master/docs/imgs/mnistres.png)](https://github.com/dnlcrl/PyResNet/blob/master/docs/MNIST%20Experiments.ipynb)
 
+[MNIST Results - iPython notebook](https://github.com/dnlcrl/PyResNet/blob/master/docs/MNIST%20Experiments.ipynb)
+
+
 ###  [SFDDD](https://www.kaggle.com/c/state-farm-distracted-driver-detection)
 
 best error: 0.25 % (accuracy: 0.9975 %) on a subset (1000 samples) of the train data (~21k images) with a 44 layers residual network (n=7), resizing the images to 64x48, randomly cropping 32x32 images for training and cropping a 32x32 image from the center of the original images for testing. Unfortunately I got more than 2% error on Kaggle's results (composed of ~80k images).
+
+[![SFDDD results](https://github.com/dnlcrl/deep-residual-networks-pyfunt/blob/master/docs/imgs/SFDDD.png)](https://github.com/dnlcrl/PyResNet/blob/master/docs/SFDDD%20Experiments.ipynb)
 	
-WIP
+[SFDDD Results - iPython notebook](https://github.com/dnlcrl/PyResNet/blob/master/docs/SFDDD%20Experiments.ipynb)
 
 ## TODOs:
 
