@@ -13,9 +13,13 @@ from pyfunt.solver import Solver as Solver
 import inspect
 import argparse
 
+from pyfunt.class_nll_criterion import ClassNLLCriterion
+
+np.seterr(all='raise')
+
 np.random.seed(0)
 
-DATA_PATH = 'CIFAR_DATASET_PATH'
+DATA_PATH = '../CIFAR_DATASET_PATH'
 
 path_set = False
 while not path_set:
@@ -160,14 +164,14 @@ def custom_update_decay(epoch):
 
 
 def print_infos(solver):
-    print 'Model: \n%s' % solver.model
+    print('Model: \n%s' % solver.model)
 
-    print 'Solver: \n%s' % solver
+    print('Solver: \n%s' % solver)
 
-    print 'Data Augmentation Function: \n'
-    print ''.join(['\t' + i for i in inspect.getsourcelines(data_augm)[0]])
-    print 'Custom Weight Decay Update Rule: \n'
-    print ''.join(['\t' + i for i in inspect.getsourcelines(custom_update_decay)[0]])
+    print('Data Augmentation Function: \n')
+    print(''.join(['\t' + i for i in inspect.getsourcelines(data_augm)[0]]))
+    print('Custom Weight Decay Update Rule: \n')
+    print(''.join(['\t' + i for i in inspect.getsourcelines(custom_update_decay)[0]]))
 
 
 def main():
@@ -202,8 +206,9 @@ def main():
     bs = args.batch_size
     num_p = args.n_processes
     cp = args.checkpoint_every
-
+    criterion = ClassNLLCriterion()
     solver = Solver(model, data, args.load_checkpoint,
+                    criterion=criterion,
                     num_epochs=epochs, batch_size=bs,  # 20
                     update_rule='sgd_th',
                     optim_config=optim_config,
@@ -218,7 +223,7 @@ def main():
     solver.export_model(exp_path)
     solver.export_histories(exp_path)
 
-    print 'finish'
+    print('finish')
 
 
 if __name__ == '__main__':

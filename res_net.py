@@ -1,30 +1,46 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-import numpy as np
-
-from pyfunt.layers.layers import (log_softmax_loss,
-                                  spatial_batchnorm_forward,
-                                  spatial_batchnorm_backward,
-                                  relu_forward,
-                                  relu_backward)
-
-from pyfunt.layers.fast_layers import (conv_forward_fast as conv_forward,
-                                       conv_backward_fast as conv_backward)
-
-from pyfunt.layers.layer_utils import (affine_bn_relu_forward,
-                                       affine_bn_relu_backward,
-                                       skip_forward, skip_backward,
-                                       avg_pool_forward,
-                                       avg_pool_backward,
-                                       affine_forward, affine_backward)
-
-from pyfunt.layers.init import (init_conv_w_kaiming, init_bn_w_disp, init_bn_w,
-                                init_affine_wb)
+from pyfunt.spatial_convolution import SpatialConvolution
+from pyfunt.spatial_batch_normalitazion import SpatialBatchNormalization
+from pyfunt.spatial_average_pooling import SpatialAveragePooling
+from pyfunt.sequential import Sequential
+from pyfunt.relu import ReLU
+from pyfunt.linear import Linear
+from pyfunt.reshape import Reshape
+from pyfunt.log_soft_max import LogSoftMax
+from pyfunt.padding import Padding
+from pyfunt.identity import Identity
+from pyfunt.concat_table import ConcatTable
+from pyfunt.c_add_table import CAddTable
 
 
-class ResNet(object):
+def residual_layer(n_channels, n_out_channels=None, stride=None):
+    n_out_channels = n_out_channels or n_channels
+    stride = stride or 1
 
+    convs = Sequential()
+    add = convs.add
+    add(SpatialConvolution(
+        n_channels, n_out_channels, 3, 3, stride, stride, 1, 1))
+    add(SpatialBatchNormalization(n_out_channels))
+    add(SpatialConvolution(n_out_channels, n_out_channels, 3, 3, 1, 1, 1, 1))
+    add(SpatialBatchNormalization(n_out_channels))
+
+    if stride > 1:
+        shortcut = Sequential()
+        shortcut.add(SpatialAveragePooling(2, 2, stride, stride))
+        shortcut.add(Padding(1, (n_out_channels - n_channels)/2, 3))
+    else:
+        shortcut = Identity()
+
+    res = Sequential()
+    res.add(ConcatTable().add(convs).add(shortcut)).add(CAddTable())
+    # https://github.com/szagoruyko/wide-residual-networks/blob/master/models/resnet-pre-act.lua
+
+    res.add(ReLU(True))
+
+    return res
+
+
+def resnet(n_size, num_starting_filters, reg):
     '''
     Implementation of ["Deep Residual Learning for Image Recognition",Kaiming \
     He, Xiangyu Zhang, Shaoqing Ren, Jian Sun - http://arxiv.org/abs/1512.03385
@@ -135,12 +151,7 @@ class ResNet(object):
     's bn (https://github.com/gcr/torch-residual-networks/blob/master/residual\
            -layers.lua#L57-L59) by calling init_bn_w_gcr.
 
-    '''
-
-    def __init__(self, n_size=1, input_dim=(3, 32, 32), num_starting_filters=16,
-                 hidden_dims=[], num_classes=10, reg=0.0, weights=None, dtype=np.float32):
-        '''
-        num_filters=[16, 16, 32, 32, 64, 64],
+    num_filters=[16, 16, 32, 32, 64, 64],
         Initialize a new network.
 
         Inputs:
@@ -154,417 +165,28 @@ class ResNet(object):
         - num_classes: Number of scores to produce from the final affine layer.
         - reg: Scalar giving L2 regularization strength
         - dtype: numpy datatype to use for computation.
-        '''
-        self.params = {}
-        self.reg = reg
-        self.dtype = dtype
-        self.bn_params = {}
-        self.n_size = n_size
-        self.input_dim = input_dim
-        self.hidden_dims = hidden_dims
-        self.filter_size = 3
-
-        self.num_filters = self._init_filters(num_starting_filters)
-        self.conv_layers = len(self.num_filters)
-        self.affine_layers = len(hidden_dims)
-        self.pool_l = self.conv_layers + 1
-        self.softmax_l = self.conv_layers + self.affine_layers + 2
-        self.affine_l = self.conv_layers + 2
-        self.return_probs = False
-
-        self._init_conv_weights()
-
-        assert (self.input_dim[-1] % 4) == 0
-        p = self.input_dim[-1] / 4
-        self.final_pool_param = {
-            'stride': p, 'pool_height': p, 'pool_width': p}
-
-        self.h_dims = (
-            [hidden_dims[0]] if len(hidden_dims) > 0 else []) + hidden_dims
-
-        if weights:
-            for k, v in weights.iteritems():
-                self.params[k] = v.astype(dtype)
-            return
-
-        self._init_affine_weights()
-
-        self._init_scoring_layer(num_classes)
-
-        for k, v in self.params.iteritems():
-            self.params[k] = v.astype(dtype)
-
-    def __str__(self):
-        return """
-        Residual Network:
-            NSize: %d;
-            Numbers of filters for each layer:%s;
-            Optional linear layers dimensions: %s;
-            Regularization factor: %f;
-        """ % (self.n_size,
-               str(self.num_filters),
-               str(self.hidden_dims),
-               self.reg)
-
-    def _init_filters(self, nf):
-        '''
-        Initialize conv filters like in
-        https://github.com/gcr/torch-residual-networks
-        Called by self.__init__
-        '''
-
-        num_filters = [nf]  # first conv
-        for i in range(self.n_size):  # n res blocks
-            num_filters += [nf] * 2
-        nf *= 2
-        num_filters += [nf] * 2  # res block increase ch
-        for i in range(self.n_size-1):  # n-1 res blocks
-            num_filters += [nf] * 2
-
-        nf *= 2
-        num_filters += [nf] * 2  # res block increase ch
-        for i in range(self.n_size-1):  # n-1 res blocks
-            num_filters += [nf] * 2
-        return num_filters
-
-    def _init_conv_weights(self):
-        '''
-        Initialize conv weights.
-        Called by self.__init__
-        '''
-        # Size of the input
-        Cinput, Hinput, Winput = self.input_dim
-        filter_size = self.filter_size
-
-        # Initialize the weight for the conv layers
-        F = [Cinput] + self.num_filters
-        for i in xrange(self.conv_layers):
-            idx = i + 1
-            shape = F[i + 1], F[i], filter_size, filter_size
-            out_ch = shape[0]
-            W = init_conv_w_kaiming(shape)
-            b = np.zeros(out_ch)
-            self.params['W%d' % idx] = W
-            self.params['b%d' % idx] = b
-            bn_param = {'mode': 'train',
-                        'running_mean': np.zeros(out_ch),
-                        'running_var': np.ones(out_ch)}
-            # if i % 2 == 0 else init_bn_w_disp(out_ch)
-            gamma = init_bn_w(out_ch)
-            beta = np.zeros(out_ch)
-            self.bn_params['bn_param%d' % idx] = bn_param
-            self.params['gamma%d' % idx] = gamma
-            self.params['beta%d' % idx] = beta
-
-        # Initialize conv/pools parameters
-        self.conv_param1 = {'stride': 1, 'pad': (filter_size - 1) / 2}
-        self.conv_param2 = {'stride': 2, 'pad': 0}
-        self.pool_param1 = {'pool_height': 2, 'pool_width': 2, 'stride': 2}
-
-    def _init_affine_weights(self):
-        '''
-        Initialize affine weights.
-        Called by self.__init__
-        '''
-        dims = self.h_dims
-        for i in xrange(self.affine_layers):
-            idx = self.affine_l + i
-            shape = dims[i], dims[i + 1]
-            out_ch = shape[1]
-            W, b = init_affine_wb(shape)
-            self.params['W%d' % idx] = W
-            self.params['b%d' % idx] = b
-            bn_param = {'mode': 'train',
-                        'running_mean': np.zeros(out_ch),
-                        'running_var': np.ones(out_ch)}
-            gamma = np.ones(out_ch)
-            beta = np.zeros(out_ch)
-            self.bn_params['bn_param%d' % idx] = bn_param
-            self.params['gamma%d' % idx] = gamma
-            self.params['beta%d' % idx] = beta
-
-    def _init_scoring_layer(self, num_classes):
-        '''
-        Initialize scoring layer weights.
-        Called by self.__init__
-        '''
-        # Scoring layer
-        in_ch = self.h_dims[-1] if \
-            len(self.h_dims) > 0 else self.num_filters[-1]
-        shape = in_ch, num_classes
-        W, b = init_affine_wb(shape)
-        i = self.softmax_l
-        self.params['W%d' % i] = W
-        self.params['b%d' % i] = b
-
-    def _extract(self, params, idx, bn=True):
-        '''
-        Ectract Parameters from params
-        '''
-        w = params['W%d' % idx]
-        b = params['b%d' % idx]
-        if bn:
-            beta = params['beta%d' % idx]
-            gamma = params['gamma%d' % idx]
-            bn_param = self.bn_params['bn_param%d' % idx]
-            return w, b, beta, gamma, bn_param
-        return w, b
-
-    def _put(self, cache, idx, h, cache_h):
-        '''
-        Put h and h_cache in cache
-        '''
-        cache['h%d' % idx] = h
-        cache['cache_h%d' % idx] = cache_h
-        return cache
-
-    def _put_grads(self, cache, idx, dh, dw, db, dbeta=None, dgamma=None):
-        '''
-        Put grads in cache
-        '''
-        cache['dh%d' % (idx - 1)] = dh
-        cache['dW%d' % idx] = dw
-        cache['db%d' % idx] = db
-        if dbeta is not None:
-            cache['dbeta%d' % idx] = dbeta
-            cache['dgamma%d' % idx] = dgamma
-        return cache
-
-    def _forward_first_conv(self, cache):
-        i = 0
-        idx = i + 1
-        h = cache['h%d' % (idx - 1)]
-        w, b, beta, gamma, bn_param = self._extract(self.params, idx)
-
-        conv_param = self.conv_param1
-
-        c_out, conv_cache = conv_forward(h, w, b, conv_param)
-        bn_out, batchnorm_cache = spatial_batchnorm_forward(
-            c_out, gamma, beta, bn_param)
-        h, relu_cache = relu_forward(bn_out)
-        cache_h = (conv_cache, batchnorm_cache, relu_cache)
-
-        self._put(cache, idx, h, cache_h)
-
-    def _forward_convs(self, cache):
-        '''
-        Execute convolution layers' forward pass
-        '''
-        for i in xrange(1, self.conv_layers):
-            idx = i + 1
-            h = cache['h%d' % (idx - 1)]
-            w, b, beta, gamma, bn_param = self._extract(self.params, idx)
-
-            out_ch, in_ch = w.shape[:2]
-            if i > 0 and i % 2 == 1:
-                # store skip
-                skip, skip_cache = skip_forward(h, out_ch)
-                cache['cache_skip%d' % idx] = skip_cache
-            if i == 0 or in_ch == out_ch:
-                conv_param = self.conv_param1
-            else:
-                conv_param = self.conv_param2
-                h = np.pad(
-                    h, ((0, 0), (0, 0), (1, 0), (1, 0)), mode='constant')
-
-            c_out, conv_cache = conv_forward(h, w, b, conv_param)
-            bn_out, batchnorm_cache = spatial_batchnorm_forward(
-                c_out, gamma, beta, bn_param)
-            h, relu_cache = relu_forward(bn_out)
-            cache_h = (conv_cache, batchnorm_cache, relu_cache)
-
-            if i > 0 and i % 2 == 0:
-                # add skip
-                h += skip
-            self._put(cache, idx, h, cache_h)
-
-    def _forward_affines(self, cache):
-        '''
-        Execute affine layers's forward pass
-        '''
-        for i in xrange(self.affine_layers):
-            idx = self.affine_l + i
-            h = cache['h%d' % (idx - 1)]
-            w, b, beta, gamma, bn_param = self._extract(self.params, idx)
-
-            h, cache_h = affine_bn_relu_forward(h, w, b, gamma,
-                                                beta, bn_param)
-            self._put(cache, idx, h, cache_h)
-
-    def _forward_pool(self, cache):
-        '''
-        Execute pooling layer's forward pass
-        '''
-        idx = self.pool_l
-        h = cache['h%d' % (idx - 1)]
-        h, cache_h = avg_pool_forward(h, self.final_pool_param)
-        self._put(cache, idx, h, cache_h)
-
-    def _forward_score_layer(self, cache):
-        '''
-        Execute softmax layer's forward pass
-        '''
-        idx = self.softmax_l
-        w, b = self._extract(self.params, idx, bn=False)
-        h = cache['h%d' % (idx - 1)]
-        h, cache_h = affine_forward(h, w, b)
-        self._put(cache, idx, h, cache_h)
-
-    def _backward_score_layer(self, dscores, cache):
-        '''
-        Execute softmax layer's backward pass
-        '''
-        idx = self.softmax_l
-        dh = dscores
-        h_cache = cache['cache_h%d' % idx]
-        dh, dw, db = affine_backward(dh, h_cache)
-        self._put_grads(cache, idx, dh, dw, db)
-
-    def _backward_pool(self, cache):
-        '''
-        Execute pooling layer's backward pass
-        '''
-        idx = self.pool_l
-        dh = cache['dh%d' % idx]
-        h_cache = cache['cache_h%d' % idx]
-        dh = avg_pool_backward(dh, h_cache)
-        cache['dh%d' % (idx - 1)] = dh
-
-    def _backward_affines(self, cache):
-        '''
-        Execute affine layers' backward pass
-        '''
-        for i in range(self.affine_layers)[::-1]:
-            idx = self.affine_l + i
-            dh = cache['dh%d' % idx]
-            h_cache = cache['cache_h%d' % idx]
-            dh, dw, db, dgamma, dbeta = affine_bn_relu_backward(
-                dh, h_cache)
-            self._put_grads(cache, idx, dh, dw, db, dbeta, dgamma)
-
-    def _backward_convs(self, cache):
-        '''
-        Execute convolution layers' backward pass
-        '''
-        for i in range(1, self.conv_layers)[::-1]:
-            idx = i + 1
-            dh = cache['dh%d' % idx]
-            h_cache = cache['cache_h%d' % idx]
-            w = self.params['W%d' % idx]
-
-            out_ch, in_ch = w.shape[:2]
-            if i > 0 and i % 2 == 0:
-                skip_cache = cache['cache_skip' + str(idx-1)]
-                dskip = skip_backward(dh, skip_cache)
-
-            if i == self.conv_layers-1:
-                dh = dh.reshape(*cache['h%d' % idx].shape)
-
-            conv_cache, batchnorm_cache, relu_cache = h_cache
-            dbn = relu_backward(dh, relu_cache)
-            dconv, dgamma, dbeta = spatial_batchnorm_backward(
-                dbn, batchnorm_cache)
-            dh, dw, db = conv_backward(dconv, conv_cache)
-
-            if not(i == 0 or in_ch == out_ch):
-                # back pad trick
-                dh = dh[:, :, 1:, 1:]
-
-            if i > 0 and i % 2 == 1:
-                dh += dskip
-
-            self._put_grads(cache, idx, dh, dw, db, dbeta, dgamma)
-
-    def _backward_first_conv(self, cache):
-        '''
-        Execute convolution layers' backward pass
-        '''
-        i = 0
-        idx = i + 1
-        dh = cache['dh%d' % idx]
-        h_cache = cache['cache_h%d' % idx]
-
-        if i == self.conv_layers-1:
-            dh = dh.reshape(*cache['h%d' % idx].shape)
-
-        conv_cache, batchnorm_cache, relu_cache = h_cache
-        dbn = relu_backward(dh, relu_cache)
-        dconv, dgamma, dbeta = spatial_batchnorm_backward(dbn, batchnorm_cache)
-        dh, dw, db = conv_backward(dconv, conv_cache)
-
-        self._put_grads(cache, idx, dh, dw, db, dbeta, dgamma)
-
-    def loss_helper(self, args):
-        '''
-        Helper method used to call loss() within a pool of processes using \
-        pool.map_async.
-        '''
-        return self.loss(*args)
-
-    def loss(self, X, y=None, compute_dX=False):
-        '''
-        Evaluate loss and gradient for the three-layer convolutional network.
-        '''
-        X = X.astype(self.dtype)
-        mode = 'test' if y is None else 'train'
-        params = self.params
-        for key, bn_param in self.bn_params.iteritems():
-            bn_param[mode] = mode
-        scores = None
-
-        cache = {}
-        cache['h0'] = X
-
-        self._forward_first_conv(cache)
-
-        self._forward_convs(cache)
-
-        self._forward_pool(cache)
-
-        self._forward_affines(cache)
-
-        self._forward_score_layer(cache)
-
-        scores = cache['h%d' % self.softmax_l]
-
-        if y is None:
-            if self.return_probs:
-                probs = np.exp(scores - np.max(scores, axis=1, keepdims=True))
-                probs /= np.sum(probs, axis=1, keepdims=True)
-                return probs
-
-            return scores
-
-        loss, grads = 0, {}
-
-        data_loss, dscores = log_softmax_loss(scores, y)
-
-        # Backward pass
-        self._backward_score_layer(dscores, cache)
-
-        self._backward_affines(cache)
-
-        self._backward_pool(cache)
-
-        self._backward_convs(cache)
-
-        self._backward_first_conv(cache)
-
-        if compute_dX:
-            return cache['dh0']
-
-        # apply regularization to ALL parameters
-        grads = {}
-        reg_loss = .0
-        for key, val in cache.iteritems():
-            if key[:1] == 'd' and 'h' not in key:  # all params gradients
-                reg_term = 0
-                if self.reg:
-                    reg_term = self.reg * params[key[1:]]
-                    w = params[key[1:]]
-                    reg_loss += 0.5 * self.reg * np.sum(w * w)
-                grads[key[1:]] = val + reg_term
-
-        loss = data_loss + reg_loss
-
-        return loss, grads
+    '''
+
+    nfs = num_starting_filters
+    model = Sequential()
+    add = model.add
+    add(SpatialConvolution(3, nfs, 3, 3, 1, 1, 1, 1))
+    add(SpatialBatchNormalization(nfs))
+    add(ReLU())
+
+    for i in xrange(1, n_size):
+        add(residual_layer(nfs))
+    add(residual_layer(nfs, 2*nfs, 2))
+
+    for i in xrange(1, n_size-1):
+        add(residual_layer(2*nfs))
+    add(residual_layer(2*nfs, 4*nfs, 2))
+
+    for i in xrange(1, n_size-1):
+        add(residual_layer(4*nfs))
+
+    add(SpatialAveragePooling(8, 8))
+    add(Reshape(nfs*4))
+    add(Linear(nfs*4, 10))
+    add(LogSoftMax())
+    return model
