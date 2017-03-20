@@ -7,7 +7,7 @@ import numpy as np
 from pydatset.cifar10 import get_CIFAR10_data
 from pydatset.data_augmentation import (random_flips,
                                         random_crops)
-from res_net import ResNet
+from res_net import resnet
 from pyfunt.solver import Solver as Solver
 
 import inspect
@@ -191,7 +191,7 @@ def main():
     nf = args.n_starting_filters
     reg = args.network_regularization
 
-    model = ResNet(n_size=args.n_size,
+    model = resnet(n_size=args.n_size,
                    num_starting_filters=nf,
                    reg=reg)
 
