@@ -4,10 +4,9 @@ from pyfunt import (SpatialConvolution, SpatialBatchNormalization,
                 CAddTable)
 
 
-def residual_layer(n_channels, n_out_channels=None, stride=None):
+def residual_layer(n_channels, n_out_channels=None, stride=1):
     n_out_channels = n_out_channels or n_channels
-    stride = stride or 1
-
+    
     convs = Sequential()
     add = convs.add
     add(SpatialConvolution(
